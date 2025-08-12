@@ -1,0 +1,25 @@
+# Backend
+backend/node_modules/
+backend/.env
+backend/uploads/
+backend/npm-debug.log*
+backend/yarn-debug.log*
+backend/yarn-error.log*
+
+# Frontend Flutter
+sewin/.dart_tool/
+sewin/.flutter-plugins
+sewin/.flutter-plugins-dependencies
+sewin/.packages
+sewin/.pub-cache/
+sewin/.pub/
+sewin/build/
+sewin/.idea/
+sewin/*.iml
+
+# General
+.DS_Store
+.vscode/
+*.log
+*.tmp
+*.temp

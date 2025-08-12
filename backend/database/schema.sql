@@ -1,0 +1,126 @@
+-- Esquema para sistema de documentos en base de datos existente secwin_db
+-- Ejecutar estos comandos en la base de datos secwin_db
+
+-- Crear tipos ENUM para el sistema de documentos
+CREATE TYPE convencion_tipo AS ENUM (
+    'Manual',
+    'Procedimiento', 
+    'Instructivo',
+    'Formato',
+    'Documento Externo'
+);
+
+CREATE TYPE estado_doc AS ENUM (
+    'pendiente_revision',
+    'pendiente_aprobacion', 
+    'aprobado',
+    'rechazado'
+);
+
+-- Tabla de gestiones
+CREATE TABLE IF NOT EXISTS gestiones (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL,
+    descripcion TEXT,
+    activo BOOLEAN DEFAULT true,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Verificar si ya existe tabla usuarios, si no crearla básica
+-- (Probablemente ya existe en tu BD secwin_db)
+CREATE TABLE IF NOT EXISTS usuarios (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    rol VARCHAR(50) DEFAULT 'usuario',
+    activo BOOLEAN DEFAULT true,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla principal de documentos
+CREATE TABLE IF NOT EXISTS documentos (
+    id SERIAL PRIMARY KEY,
+    codigo VARCHAR(50) NOT NULL UNIQUE,
+    nombre VARCHAR(255) NOT NULL,
+    descripcion TEXT,
+    gestion_id INT NOT NULL REFERENCES gestiones(id) ON DELETE CASCADE,
+    convencion convencion_tipo NOT NULL,
+    vinculado_a INT REFERENCES documentos(id) ON DELETE SET NULL,
+    archivo_fuente VARCHAR(255),
+    archivo_pdf VARCHAR(255),
+    version INT DEFAULT 1,
+    estado estado_doc DEFAULT 'pendiente_revision',
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_creador INT REFERENCES usuarios(id),
+    usuario_revisor INT REFERENCES usuarios(id),
+    usuario_aprobador INT REFERENCES usuarios(id),
+    fecha_revision TIMESTAMP,
+    fecha_aprobacion TIMESTAMP,
+    comentarios_revision TEXT,
+    comentarios_aprobacion TEXT
+);
+
+-- Tabla de histórico de versiones
+CREATE TABLE IF NOT EXISTS historico_documentos (
+    id SERIAL PRIMARY KEY,
+    documento_id INT NOT NULL REFERENCES documentos(id) ON DELETE CASCADE,
+    version INT NOT NULL,
+    archivo_fuente VARCHAR(255),
+    archivo_pdf VARCHAR(255),
+    estado estado_doc,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_id INT REFERENCES usuarios(id),
+    comentarios TEXT,
+    accion VARCHAR(100) -- 'creado', 'actualizado', 'revisado', 'aprobado', 'rechazado'
+);
+
+-- Índices para mejorar rendimiento
+CREATE INDEX IF NOT EXISTS idx_documentos_codigo ON documentos(codigo);
+CREATE INDEX IF NOT EXISTS idx_documentos_gestion ON documentos(gestion_id);
+CREATE INDEX IF NOT EXISTS idx_documentos_estado ON documentos(estado);
+CREATE INDEX IF NOT EXISTS idx_documentos_convencion ON documentos(convencion);
+CREATE INDEX IF NOT EXISTS idx_historico_documento ON historico_documentos(documento_id);
+
+-- Función para actualizar fecha_actualizacion automáticamente
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.fecha_actualizacion = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Trigger para actualizar fecha_actualizacion en documentos
+DROP TRIGGER IF EXISTS update_documentos_updated_at ON documentos;
+CREATE TRIGGER update_documentos_updated_at 
+    BEFORE UPDATE ON documentos 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger para actualizar fecha_actualizacion en gestiones
+DROP TRIGGER IF EXISTS update_gestiones_updated_at ON gestiones;
+CREATE TRIGGER update_gestiones_updated_at 
+    BEFORE UPDATE ON gestiones 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Insertar datos de ejemplo solo si no existen
+INSERT INTO gestiones (nombre, descripcion) 
+SELECT * FROM (VALUES 
+    ('Gestión de Calidad', 'Documentos relacionados con el sistema de gestión de calidad'),
+    ('Recursos Humanos', 'Documentos de gestión de personal y recursos humanos'),
+    ('Finanzas', 'Documentos financieros y contables'),
+    ('Operaciones', 'Documentos operativos y de procesos')
+) AS v(nombre, descripcion)
+WHERE NOT EXISTS (SELECT 1 FROM gestiones WHERE nombre = v.nombre);
+
+-- Insertar usuarios de ejemplo solo si no existen
+-- (Verificar primero si ya tienes usuarios en tu tabla existente)
+INSERT INTO usuarios (nombre, email, rol) 
+SELECT * FROM (VALUES 
+    ('Administrador Docs', 'admin.docs@empresa.com', 'admin'),
+    ('Juan Pérez', 'juan.perez@empresa.com', 'creador'),
+    ('María García', 'maria.garcia@empresa.com', 'revisor'),
+    ('Carlos López', 'carlos.lopez@empresa.com', 'aprobador')
+) AS v(nombre, email, rol)
+WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE email = v.email);
