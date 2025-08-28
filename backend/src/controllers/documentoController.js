@@ -10,7 +10,6 @@ const createDocumentoSchema = Joi.object({
   descripcion: Joi.string().optional(),
   gestion_id: Joi.number().integer().positive().required(),
   convencion: Joi.string().valid('Manual', 'Procedimiento', 'Instructivo', 'Formato', 'Documento Externo').required(),
-  vinculado_a: Joi.number().integer().positive().optional(),
   usuario_creador: Joi.number().integer().positive().required()
 });
 
@@ -20,7 +19,6 @@ const updateDocumentoSchema = Joi.object({
   descripcion: Joi.string().optional(),
   gestion_id: Joi.number().integer().positive().optional(),
   convencion: Joi.string().valid('Manual', 'Procedimiento', 'Instructivo', 'Formato', 'Documento Externo').optional(),
-  vinculado_a: Joi.number().integer().positive().optional(),
   estado: Joi.string().valid('pendiente_revision', 'pendiente_aprobacion', 'aprobado', 'rechazado').optional(),
   usuario_revisor: Joi.number().integer().positive().optional(),
   usuario_aprobador: Joi.number().integer().positive().optional(),
@@ -32,6 +30,14 @@ class DocumentoController {
   // Crear nuevo documento
   static async create(req, res) {
     try {
+      // Convertir campos numéricos de string a number (multipart/form-data los envía como strings)
+      if (req.body.gestion_id && req.body.gestion_id !== '') {
+        req.body.gestion_id = parseInt(req.body.gestion_id);
+      }
+      if (req.body.usuario_creador && req.body.usuario_creador !== '') {
+        req.body.usuario_creador = parseInt(req.body.usuario_creador);
+      }
+
       // Validar datos de entrada
       const { error, value } = createDocumentoSchema.validate(req.body);
       if (error) {
@@ -468,7 +474,7 @@ class DocumentoController {
   // Descargar archivo
   static async downloadFile(req, res) {
     try {
-      const { id, tipo } = req.params; // tipo: 'fuente' o 'pdf'
+      const { id, tipo } = req.params; // tipo: 'fuente', 'pdf', o 'signed'
 
       if (!id || isNaN(parseInt(id))) {
         return res.status(400).json({
@@ -486,7 +492,31 @@ class DocumentoController {
         });
       }
 
-      const fileName = tipo === 'fuente' ? documento.archivo_fuente : documento.archivo_pdf;
+      let fileName, filePath;
+
+      if (tipo === 'fuente') {
+        fileName = documento.archivo_fuente;
+        filePath = path.join(process.env.UPLOADS_PATH || 'uploads', fileName);
+      } else if (tipo === 'pdf') {
+        fileName = documento.archivo_pdf;
+        filePath = path.join(process.env.UPLOADS_PATH || 'uploads', fileName);
+      } else if (tipo === 'signed') {
+        fileName = documento.signed_file_path;
+        if (!fileName) {
+          return res.status(404).json({
+            success: false,
+            message: 'Documento no ha sido firmado aún'
+          });
+        }
+        const { resolvePath } = require('../../lib/storage');
+        const SIGNED_DIR = resolvePath(process.env.SIGNED_DIR || './signed');
+        filePath = path.join(SIGNED_DIR, fileName);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Tipo de archivo inválido. Use: fuente, pdf, o signed'
+        });
+      }
 
       if (!fileName) {
         return res.status(404).json({
@@ -495,11 +525,32 @@ class DocumentoController {
         });
       }
 
-      const filePath = path.join(process.env.UPLOADS_PATH || 'uploads', fileName);
-
       try {
         await fs.access(filePath);
-        res.download(filePath, fileName);
+        
+        // Determinar el tipo de contenido basado en la extensión del archivo
+        const ext = path.extname(fileName).toLowerCase();
+        let contentType = 'application/octet-stream';
+        let downloadName = fileName;
+        
+        if (ext === '.docx') {
+          contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        } else if (ext === '.doc') {
+          contentType = 'application/msword';
+        } else if (ext === '.pdf') {
+          contentType = 'application/pdf';
+        } else if (ext === '.xlsx') {
+          contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        } else if (ext === '.xls') {
+          contentType = 'application/vnd.ms-excel';
+        }
+        
+        // Configurar headers para descarga
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+        res.setHeader('Cache-Control', 'no-cache');
+        
+        res.download(filePath, downloadName);
       } catch (error) {
         res.status(404).json({
           success: false,
@@ -527,6 +578,449 @@ class DocumentoController {
       console.error('Error limpiando archivos:', error);
     }
   }
+
+  // Convertir documento a PDF
+  static async convertirPdf(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!id || isNaN(parseInt(id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID de documento inválido'
+        });
+      }
+
+      const documento = await Documento.findById(parseInt(id));
+
+      if (!documento) {
+        return res.status(404).json({
+          success: false,
+          message: 'Documento no encontrado'
+        });
+      }
+
+      if (documento.estado !== 'aprobado') {
+        return res.status(400).json({
+          success: false,
+          message: 'Solo se pueden convertir documentos aprobados'
+        });
+      }
+
+      const archivoFuente = documento.archivo_fuente;
+      if (!archivoFuente) {
+        return res.status(404).json({
+          success: false,
+          message: 'Archivo fuente no encontrado'
+        });
+      }
+
+      const { changeExtToPdf, docxToPdf } = require('../../lib/convert');
+      const filePath = path.join(process.env.UPLOADS_PATH || 'uploads', archivoFuente);
+      const pdfPath = changeExtToPdf(filePath, path.join(process.env.UPLOADS_PATH || 'uploads'));
+
+      try {
+        await fs.access(filePath);
+        await docxToPdf(filePath, pdfPath);
+        
+        // Actualizar documento con la ruta del PDF
+        await Documento.update(parseInt(id), { archivo_pdf: path.basename(pdfPath) });
+        
+        res.json({
+          success: true,
+          message: 'Documento convertido a PDF exitosamente',
+          pdf_path: pdfPath
+        });
+      } catch (error) {
+        console.error('Error convirtiendo archivo:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Error convirtiendo archivo a PDF'
+        });
+      }
+
+    } catch (error) {
+      console.error('Error convirtiendo a PDF:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      });
+    }
+  }
+
+  // Revisar documento
+  static async revisarDocumento(req, res) {
+    try {
+      const { id } = req.params;
+      const { revisor_name, usuario_revisor } = req.body;
+
+      if (!id || isNaN(parseInt(id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID de documento inválido'
+        });
+      }
+
+      if (!revisor_name) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nombre del revisor es requerido'
+        });
+      }
+
+      const documento = await Documento.findById(parseInt(id));
+
+      if (!documento) {
+        return res.status(404).json({
+          success: false,
+          message: 'Documento no encontrado'
+        });
+      }
+
+      if (documento.estado !== 'pendiente_revision') {
+        return res.status(400).json({
+          success: false,
+          message: 'Solo se pueden revisar documentos en estado "pendiente_revision"'
+        });
+      }
+
+      const archivoFuente = documento.archivo_fuente;
+      if (!archivoFuente) {
+        return res.status(404).json({
+          success: false,
+          message: 'Archivo fuente no encontrado'
+        });
+      }
+
+      const { resolvePath } = require('../../lib/storage');
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+      
+      const SIGNED_DIR = resolvePath(process.env.SIGNED_DIR || './signed');
+      const inputPath = path.join(process.env.UPLOADS_PATH || 'uploads', archivoFuente);
+      const ext = path.extname(archivoFuente);
+      const signedFileName = `${documento.codigo}_v${documento.version}_revisado${ext}`;
+      const signedPath = path.join(SIGNED_DIR, signedFileName);
+
+      // Obtener imagen de firma del revisor o usar firma por defecto
+      let signatureImagePath = null;
+      
+      if (usuario_revisor) {
+        try {
+          const { query } = require('../../lib/db');
+          const result = await query('SELECT signature_image FROM users WHERE id = $1', [usuario_revisor]);
+          
+          if (result.rows.length > 0 && result.rows[0].signature_image) {
+            const userSignaturePath = path.join(process.cwd(), result.rows[0].signature_image);
+            
+            try {
+              await fs.access(userSignaturePath);
+              signatureImagePath = userSignaturePath;
+            } catch (error) {
+              console.warn('Imagen de firma de revisor no encontrada:', userSignaturePath);
+            }
+          }
+        } catch (error) {
+          console.warn('Error obteniendo firma de revisor:', error.message);
+        }
+      }
+      
+      // Crear directorio signatures si no existe
+      const signaturesDir = process.env.SIGNATURES_PATH || 'signatures';
+      try {
+        await fs.mkdir(signaturesDir, { recursive: true });
+      } catch (error) {
+        // Directorio ya existe, continuar
+      }
+
+      // Usar script Python para firmar Word/Excel directamente
+      if (ext.toLowerCase() === '.docx' || ext.toLowerCase() === '.doc') {
+        const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'firmar_word.py');
+        
+        const command = signatureImagePath 
+          ? `python3 "${scriptPath}" "${inputPath}" "${signatureImagePath}" "${signedPath}" "${revisor_name}"`
+          : `python3 "${scriptPath}" "${inputPath}" "" "${signedPath}" "${revisor_name}"`;
+        
+        const { stdout, stderr } = await execAsync(command);
+        
+        if (stderr && !stderr.includes('Warning')) {
+          throw new Error(`Error en script Python: ${stderr}`);
+        }
+      } else if (ext.toLowerCase() === '.xlsx' || ext.toLowerCase() === '.xls') {
+        // Para Excel, usar DocumentSigner
+        const DocumentSigner = require('../../lib/documentSigner');
+        const signer = new DocumentSigner();
+        await signer.signDocument(inputPath, signedPath, revisor_name, signatureImagePath);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: `Formato no soportado para revisión: ${ext}. Solo se admiten .docx, .doc, .xlsx, .xls`
+        });
+      }
+      
+      // Verificar que se creó el archivo revisado
+      await fs.access(signedPath);
+      
+      // Actualizar documento como revisado
+      await Documento.update(parseInt(id), {
+        estado: 'pendiente_aprobacion',
+        usuario_revisor: usuario_revisor || null,
+        fecha_revision: new Date().toISOString(),
+        archivo_revisado: path.basename(signedPath)
+      });
+
+      return res.json({
+        success: true,
+        message: 'Documento revisado exitosamente',
+        signed_file_path: path.basename(signedPath),
+        download_url: `/api/documentos/${id}/download/reviewed`
+      });
+
+    } catch (error) {
+      console.error('Error revisando documento:', error);
+      
+      // Limpiar archivo firmado si hubo error
+      if (signedPath) {
+        try {
+          await fs.unlink(signedPath);
+        } catch (e) {
+          console.error('Error limpiando archivo firmado:', e);
+        }
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor al revisar el documento',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
+  // Firmar documento
+  static async firmarDocumento(req, res) {
+    try {
+      const { id } = req.params;
+      const { signer_name, usuario_firmante } = req.body;
+
+      if (!id || isNaN(parseInt(id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID de documento inválido'
+        });
+      }
+
+      if (!signer_name) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nombre del firmante es requerido'
+        });
+      }
+
+      const documento = await Documento.findById(parseInt(id));
+
+      if (!documento) {
+        return res.status(404).json({
+          success: false,
+          message: 'Documento no encontrado'
+        });
+      }
+
+      if (documento.estado !== 'aprobado') {
+        return res.status(400).json({
+          success: false,
+          message: 'Solo se pueden firmar documentos aprobados'
+        });
+      }
+
+      const archivoFuente = documento.archivo_fuente;
+      if (!archivoFuente) {
+        return res.status(404).json({
+          success: false,
+          message: 'Archivo fuente no encontrado'
+        });
+      }
+
+      const { resolvePath } = require('../../lib/storage');
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+      
+      const SIGNED_DIR = resolvePath(process.env.SIGNED_DIR || './signed');
+      const inputPath = path.join(process.env.UPLOADS_PATH || 'uploads', archivoFuente);
+      const ext = path.extname(archivoFuente);
+      const signedFileName = `${documento.codigo}_v${documento.version}_signed${ext}`;
+      const signedPath = path.join(SIGNED_DIR, signedFileName);
+
+      // Obtener imagen de firma del usuario o usar firma por defecto
+      let signatureImagePath = null;
+      
+      console.log('🔍 Debug firma - usuario_firmante:', usuario_firmante);
+      
+      if (usuario_firmante) {
+        try {
+          const { query } = require('../../lib/db');
+          const result = await query('SELECT signature_image FROM users WHERE id = $1', [usuario_firmante]);
+          console.log('🔍 Debug firma - resultado DB:', result.rows);
+          
+          if (result.rows.length > 0 && result.rows[0].signature_image) {
+            // Usar path.join para construir la ruta relativa
+            const userSignaturePath = path.join(process.cwd(), result.rows[0].signature_image);
+            console.log('🔍 Debug firma - ruta construida:', userSignaturePath);
+            
+            // Verificar que existe la imagen del usuario
+            try {
+              await fs.access(userSignaturePath);
+              signatureImagePath = userSignaturePath;
+              console.log('✅ Debug firma - imagen encontrada:', signatureImagePath);
+            } catch (error) {
+              console.warn('❌ Imagen de firma de usuario no encontrada:', userSignaturePath);
+              console.warn('Error:', error.message);
+              
+              // Intentar con ruta relativa como último recurso
+              const relativePath = result.rows[0].signature_image;
+              try {
+                await fs.access(relativePath);
+                signatureImagePath = relativePath;
+                console.log('✅ Debug firma - imagen encontrada (ruta relativa):', relativePath);
+              } catch (e) {
+                console.warn('❌ No se pudo acceder a la imagen con ruta relativa:', relativePath);
+              }
+            }
+          } else {
+            console.log('❌ Debug firma - usuario sin signature_image en DB');
+          }
+        } catch (error) {
+          console.warn('Error obteniendo firma de usuario:', error.message);
+        }
+      } else {
+        console.log('❌ Debug firma - no se proporcionó usuario_firmante');
+      }
+      
+      // Crear directorio signatures si no existe
+      const signaturesDir = process.env.SIGNATURES_PATH || 'signatures';
+      try {
+        await fs.mkdir(signaturesDir, { recursive: true });
+      } catch (error) {
+        // Directorio ya existe, continuar
+      }
+
+      // Usar script Python para firmar Word/Excel directamente
+      if (ext.toLowerCase() === '.docx' || ext.toLowerCase() === '.doc') {
+        const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'firmar_word.py');
+        
+        // Si no hay imagen de firma, crear una firma de texto simple
+        if (!signatureImagePath) {
+          console.log('Firmando documento sin imagen de firma, solo con texto');
+          // Crear comando sin imagen de firma - el script Python manejará esto
+          const command = `python3 "${scriptPath}" "${inputPath}" "" "${signedPath}" "${signer_name}"`;
+          const { stdout, stderr } = await execAsync(command);
+          
+          if (stderr && !stderr.includes('Warning')) {
+            throw new Error(`Error en script Python: ${stderr}`);
+          }
+        } else {
+          // Firmar con imagen
+          const command = `python3 "${scriptPath}" "${inputPath}" "${signatureImagePath}" "${signedPath}" "${signer_name}"`;
+          const { stdout, stderr } = await execAsync(command);
+          
+          if (stderr && !stderr.includes('Warning')) {
+            throw new Error(`Error en script Python: ${stderr}`);
+          }
+        }
+      } else if (ext.toLowerCase() === '.xlsx' || ext.toLowerCase() === '.xls') {
+        // Para Excel, usar DocumentSigner
+        const DocumentSigner = require('../../lib/documentSigner');
+        const signer = new DocumentSigner();
+        await signer.signDocument(inputPath, signedPath, signer_name, signatureImagePath);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: `Formato no soportado para firma: ${ext}. Solo se admiten .docx, .doc, .xlsx, .xls`
+        });
+      }
+      
+      // Verificar que se creó el archivo firmado
+      await fs.access(signedPath);
+      
+      // Actualizar documento como firmado
+      await Documento.update(parseInt(id), {
+        is_signed: true,
+        signed_file_path: signedFileName,
+        signer_name: signer_name,
+        signed_at: new Date(),
+        usuario_firmante: usuario_firmante
+      });
+      
+      res.json({
+        success: true,
+        message: 'Documento firmado exitosamente',
+        signed_file_path: signedPath,
+        download_url: `/api/documentos/${id}/download/signed`
+      });
+    } catch (error) {
+      console.error('Error firmando archivo:', error);
+      res.status(500).json({
+        success: false,
+        message: `Error firmando documento: ${error.message}`
+      });
+    }
+  }
+
+  // Obtener documentos pendientes de revisión
+  static async getPendientesRevision(req, res) {
+    try {
+      const documentos = await Documento.getPendientesRevision();
+
+      res.json({
+        success: true,
+        data: documentos
+      });
+
+    } catch (error) {
+      console.error('Error obteniendo pendientes de revisión:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      });
+    }
+  }
+
+  // Obtener documentos pendientes de aprobación
+  static async getPendientesAprobacion(req, res) {
+    try {
+      const documentos = await Documento.getPendientesAprobacion();
+
+      res.json({
+        success: true,
+        data: documentos
+      });
+
+    } catch (error) {
+      console.error('Error obteniendo pendientes de aprobación:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor'
+      });
+    }
+  }
+
 }
 
-module.exports = DocumentoController;
+module.exports = {
+  create: DocumentoController.create,
+  getAll: DocumentoController.getAll,
+  getById: DocumentoController.getById,
+  update: DocumentoController.update,
+  delete: DocumentoController.delete,
+  getHistorico: DocumentoController.getHistorico,
+  marcarRevisado: DocumentoController.marcarRevisado,
+  marcarAprobado: DocumentoController.marcarAprobado,
+  rechazar: DocumentoController.rechazar,
+  getPendientesRevision: DocumentoController.getPendientesRevision,
+  getPendientesAprobacion: DocumentoController.getPendientesAprobacion,
+  downloadFile: DocumentoController.downloadFile,
+  convertirPdf: DocumentoController.convertirPdf,
+  revisarDocumento: DocumentoController.revisarDocumento,
+  firmarDocumento: DocumentoController.firmarDocumento
+};

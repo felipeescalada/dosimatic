@@ -34,6 +34,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               ),
               const SizedBox(height: 24),
               CustomTextField(
+                maxLines: 1,
                 controller: _emailController,
                 labelText: 'Email',
                 hintText: 'Enter your email',

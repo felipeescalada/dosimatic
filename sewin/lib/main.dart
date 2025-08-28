@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sewin/screens/documentos/documento.dart';
 import 'screens/contact_list_screen.dart';
 import 'screens/contact_list_screen1.dart';
 import 'screens/contact_list_screen2.dart';
@@ -19,7 +20,7 @@ void main() {
 void _handleCurrentUrl() {
   // Obtener la URL actual
   final uri = Uri.parse(html.window.location.href);
-  
+
   // Si estamos en la ruta de reset-password, extraer el token
   if (uri.path.contains('reset-password')) {
     final token = uri.queryParameters['token'];
@@ -57,6 +58,9 @@ class MyApp extends StatelessWidget {
         '/users': (context) => const AuthGuard(
               child: UsersScreen(),
             ),
+        '/documentos': (context) => const AuthGuard(
+              child: DocumentosPage(),
+            ),
         '/contact1': (context) => const AuthGuard(
               child: ContactListScreen1(),
             ),
@@ -76,4 +80,3 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-

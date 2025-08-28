@@ -6,8 +6,8 @@ const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
   user: process.env.DB_USER || 'secwin_user',
-  password: process.env.DB_PASSWORD,
-  database: 'secwin_db', // Usar la BD existente secwin_db
+  password: process.env.DB_PASSWORD || 'secwin_password',
+  database: process.env.DB_NAME || 'secwin_db',
   max: 20, // Máximo número de conexiones en el pool
   idleTimeoutMillis: 30000, // Tiempo de espera antes de cerrar conexión inactiva
   connectionTimeoutMillis: 2000, // Tiempo de espera para obtener conexión

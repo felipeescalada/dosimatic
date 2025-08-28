@@ -11,7 +11,6 @@ class Documento {
       descripcion,
       gestion_id,
       convencion,
-      vinculado_a,
       archivo_fuente,
       archivo_pdf,
       usuario_creador
@@ -20,15 +19,15 @@ class Documento {
     const sql = `
       INSERT INTO documentos (
         codigo, nombre, descripcion, gestion_id, convencion, 
-        vinculado_a, archivo_fuente, archivo_pdf, usuario_creador,
+        archivo_fuente, archivo_pdf, usuario_creador,
         version, estado
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, 'pendiente_revision')
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, 'pendiente_aprobacion')
       RETURNING *
     `;
 
     const values = [
       codigo, nombre, descripcion, gestion_id, convencion,
-      vinculado_a, archivo_fuente, archivo_pdf, usuario_creador
+      archivo_fuente, archivo_pdf, usuario_creador
     ];
 
     const result = await query(sql, values);
@@ -42,14 +41,14 @@ class Documento {
     const sql = `
       SELECT d.*, 
              g.nombre as gestion_nombre,
-             uc.nombre as creador_nombre,
-             ur.nombre as revisor_nombre,
-             ua.nombre as aprobador_nombre
+             uc.name as creador_nombre,
+             ur.name as revisor_nombre,
+             ua.name as aprobador_nombre
       FROM documentos d
       LEFT JOIN gestiones g ON d.gestion_id = g.id
-      LEFT JOIN usuarios uc ON d.usuario_creador = uc.id
-      LEFT JOIN usuarios ur ON d.usuario_revisor = ur.id
-      LEFT JOIN usuarios ua ON d.usuario_aprobador = ua.id
+      LEFT JOIN users uc ON d.usuario_creador = uc.id
+      LEFT JOIN users ur ON d.usuario_revisor = ur.id
+      LEFT JOIN users ua ON d.usuario_aprobador = ua.id
       WHERE d.id = $1
     `;
 
@@ -64,14 +63,14 @@ class Documento {
     let sql = `
       SELECT d.*, 
              g.nombre as gestion_nombre,
-             uc.nombre as creador_nombre,
-             ur.nombre as revisor_nombre,
-             ua.nombre as aprobador_nombre
+             uc.name   as creador_nombre,
+             ur.name as revisor_nombre,
+             ua.name as aprobador_nombre
       FROM documentos d
       LEFT JOIN gestiones g ON d.gestion_id = g.id
-      LEFT JOIN usuarios uc ON d.usuario_creador = uc.id
-      LEFT JOIN usuarios ur ON d.usuario_revisor = ur.id
-      LEFT JOIN usuarios ua ON d.usuario_aprobador = ua.id
+      LEFT JOIN users uc ON d.usuario_creador = uc.id
+      LEFT JOIN users ur ON d.usuario_revisor = ur.id
+      LEFT JOIN users ua ON d.usuario_aprobador = ua.id
       WHERE 1=1
     `;
 
@@ -107,12 +106,6 @@ class Documento {
       paramCount++;
       sql += ` AND d.estado = $${paramCount}`;
       values.push(filters.estado);
-    }
-
-    if (filters.vinculado_a) {
-      paramCount++;
-      sql += ` AND d.vinculado_a = $${paramCount}`;
-      values.push(filters.vinculado_a);
     }
 
     // Ordenamiento
@@ -155,26 +148,21 @@ class Documento {
       // Guardar en histórico
       const historicoSql = `
         INSERT INTO historico_documentos (
-          documento_id, version, codigo, nombre, descripcion, gestion_id,
-          convencion, vinculado_a, archivo_fuente, archivo_pdf, estado,
-          usuario_creador, usuario_revisor, usuario_aprobador,
-          fecha_creacion, fecha_actualizacion, usuario_modificacion
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          documento_id, version, archivo_fuente, archivo_pdf, estado,
+          fecha, usuario_id, accion
+        ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6, 'actualizado')
       `;
 
       await client.query(historicoSql, [
-        current.id, current.version, current.codigo, current.nombre,
-        current.descripcion, current.gestion_id, current.convencion,
-        current.vinculado_a, current.archivo_fuente, current.archivo_pdf,
-        current.estado, current.usuario_creador, current.usuario_revisor,
-        current.usuario_aprobador, current.fecha_creacion,
-        current.fecha_actualizacion, usuario_id
+        current.id, current.version, current.archivo_fuente, current.archivo_pdf,
+        current.estado, usuario_id
       ]);
 
       // Actualizar documento principal
       const {
-        nombre, descripcion, gestion_id, convencion, vinculado_a,
-        archivo_fuente, archivo_pdf, estado
+        nombre, descripcion, gestion_id, convencion,
+        archivo_fuente, archivo_pdf, estado,
+        is_signed, signed_file_path, signer_name, signed_at, usuario_firmante
       } = updateData;
 
       const updateSql = `
@@ -183,19 +171,25 @@ class Documento {
           descripcion = COALESCE($2, descripcion),
           gestion_id = COALESCE($3, gestion_id),
           convencion = COALESCE($4, convencion),
-          vinculado_a = $5,
-          archivo_fuente = COALESCE($6, archivo_fuente),
-          archivo_pdf = COALESCE($7, archivo_pdf),
-          estado = COALESCE($8, estado),
+          archivo_fuente = COALESCE($5, archivo_fuente),
+          archivo_pdf = COALESCE($6, archivo_pdf),
+          estado = COALESCE($7, estado),
+          is_signed = COALESCE($8, is_signed),
+          signed_file_path = COALESCE($9, signed_file_path),
+          signer_name = COALESCE($10, signer_name),
+          signed_at = COALESCE($11, signed_at),
+          usuario_firmante = COALESCE($12, usuario_firmante),
           version = version + 1,
           fecha_actualizacion = CURRENT_TIMESTAMP
-        WHERE id = $9
+        WHERE id = $13
         RETURNING *
       `;
 
       const result = await client.query(updateSql, [
-        nombre, descripcion, gestion_id, convencion, vinculado_a,
-        archivo_fuente, archivo_pdf, estado, id
+        nombre, descripcion, gestion_id, convencion,
+        archivo_fuente, archivo_pdf, estado,
+        is_signed, signed_file_path, signer_name, signed_at, usuario_firmante,
+        id
       ]);
 
       await client.query('COMMIT');
@@ -210,19 +204,9 @@ class Documento {
   }
 
   /**
-   * Eliminar documento (solo si no tiene documentos vinculados)
+   * Eliminar documento
    */
   static async delete(id) {
-    // Verificar si tiene documentos vinculados
-    const vinculados = await query(
-      'SELECT COUNT(*) as count FROM documentos WHERE vinculado_a = $1',
-      [id]
-    );
-
-    if (parseInt(vinculados.rows[0].count) > 0) {
-      throw new Error('No se puede eliminar el documento porque tiene documentos vinculados');
-    }
-
     const result = await query('DELETE FROM documentos WHERE id = $1 RETURNING *', [id]);
     return result.rows[0];
   }
@@ -235,9 +219,9 @@ class Documento {
       SELECT h.*, 
              u.nombre as modificado_por
       FROM historico_documentos h
-      LEFT JOIN usuarios u ON h.usuario_modificacion = u.id
+      LEFT JOIN users u ON h.usuario_id = u.id
       WHERE h.documento_id = $1
-      ORDER BY h.version DESC
+      ORDER BY h.fecha DESC
     `;
 
     const result = await query(sql, [documento_id]);
@@ -320,10 +304,10 @@ class Documento {
     const sql = `
       SELECT d.*, 
              g.nombre as gestion_nombre,
-             uc.nombre as creador_nombre
+             uc.name as creador_nombre
       FROM documentos d
       LEFT JOIN gestiones g ON d.gestion_id = g.id
-      LEFT JOIN usuarios uc ON d.usuario_creador = uc.id
+      LEFT JOIN users uc ON d.usuario_creador = uc.id
       WHERE d.estado = 'pendiente_revision'
       ORDER BY d.fecha_creacion ASC
     `;
@@ -339,12 +323,12 @@ class Documento {
     const sql = `
       SELECT d.*, 
              g.nombre as gestion_nombre,
-             uc.nombre as creador_nombre,
-             ur.nombre as revisor_nombre
+             uc.name as creador_nombre,
+             ur.name as revisor_nombre
       FROM documentos d
       LEFT JOIN gestiones g ON d.gestion_id = g.id
-      LEFT JOIN usuarios uc ON d.usuario_creador = uc.id
-      LEFT JOIN usuarios ur ON d.usuario_revisor = ur.id
+      LEFT JOIN users uc ON d.usuario_creador = uc.id
+      LEFT JOIN users ur ON d.usuario_revisor = ur.id
       WHERE d.estado = 'pendiente_aprobacion'
       ORDER BY d.fecha_creacion ASC
     `;

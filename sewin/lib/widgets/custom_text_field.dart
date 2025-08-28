@@ -18,6 +18,7 @@ class CustomTextField extends StatelessWidget {
     this.obscureText = false,
     this.suffixIcon,
     this.validator,
+    required int maxLines,
   }) : super(key: key);
 
   @override

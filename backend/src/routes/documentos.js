@@ -32,14 +32,12 @@ const { uploadDocumentFiles, handleMulterError } = require('../middleware/upload
  *           description: Descripción del documento
  *         gestion_id:
  *           type: integer
- *           description: ID de la gestión asociada
+ *           minimum: 1
+ *           description: ID de la gestión asociada (debe ser un número positivo)
  *         convencion:
  *           type: string
  *           enum: [Manual, Procedimiento, Instructivo, Formato, Documento Externo]
  *           description: Tipo de convención del documento
- *         vinculado_a:
- *           type: integer
- *           description: ID del documento padre (si está vinculado)
  *         archivo_fuente:
  *           type: string
  *           description: Nombre del archivo fuente
@@ -96,8 +94,6 @@ const { uploadDocumentFiles, handleMulterError } = require('../middleware/upload
  *                 type: integer
  *               convencion:
  *                 type: string
- *               vinculado_a:
- *                 type: integer
  *               usuario_creador:
  *                 type: integer
  *               archivo_fuente:
@@ -219,8 +215,6 @@ router.get('/:id', DocumentoController.getById);
  *                 type: integer
  *               convencion:
  *                 type: string
- *               vinculado_a:
- *                 type: integer
  *               estado:
  *                 type: string
  *               usuario_id:
@@ -451,7 +445,7 @@ router.get('/pendientes/aprobacion', DocumentoController.getPendientesAprobacion
  *         required: true
  *         schema:
  *           type: string
- *           enum: [fuente, pdf]
+ *           enum: [fuente, pdf, signed]
  *         description: Tipo de archivo a descargar
  *     responses:
  *       200:
@@ -467,5 +461,191 @@ router.get('/pendientes/aprobacion', DocumentoController.getPendientesAprobacion
  *         description: Error interno del servidor
  */
 router.get('/:id/download/:tipo', DocumentoController.downloadFile);
+
+/**
+ * @swagger
+ * /api/documentos/{id}/convertir-pdf:
+ *   post:
+ *     summary: Convertir documento DOCX a PDF (solo documentos aprobados)
+ *     tags: [Documentos]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID del documento
+ *     responses:
+ *       200:
+ *         description: Documento convertido a PDF exitosamente
+ *       400:
+ *         description: El documento no está aprobado o no es DOCX
+ *       404:
+ *         description: Documento no encontrado
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.post('/:id/convertir-pdf', DocumentoController.convertirPdf);
+
+/**
+ * @swagger
+ * /api/documentos/{id}/firmar:
+ *   post:
+ *     summary: Firmar documento Word o Excel
+ *     tags: [Documentos]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID del documento
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - signer_name
+ *             properties:
+ *               signer_name:
+ *                 type: string
+ *                 description: Nombre del firmante
+ *               usuario_firmante:
+ *                 type: integer
+ *                 description: ID del usuario que firma (opcional, para usar su firma)
+ *     responses:
+ *       200:
+ *         description: Documento firmado exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 signed_file_path:
+ *                   type: string
+ *                 download_url:
+ *                   type: string
+ *       400:
+ *         description: Error de validación o documento no aprobado
+ *       404:
+ *         description: Documento no encontrado
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.post('/:id/firmar', DocumentoController.firmarDocumento);
+
+/**
+ * @swagger
+ * /api/documentos/{id}/download/signed:
+ *   get:
+ *     summary: Descargar documento firmado
+ *     tags: [Documentos]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID del documento
+ *     responses:
+ *       200:
+ *         description: Archivo del documento firmado
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *           application/msword:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *           application/vnd.ms-excel:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *         headers:
+ *           Content-Disposition:
+ *             schema:
+ *               type: string
+ *             description: attachment; filename="documento_firmado.docx"
+ *       404:
+ *         description: Documento no encontrado o no ha sido firmado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Documento no ha sido firmado aún"
+ *       500:
+ *         description: Error interno del servidor
+ */
+
+/**
+ * @swagger
+ * /api/documentos/{id}/revisar:
+ *   post:
+ *     summary: Revisar documento Word o Excel
+ *     tags: [Documentos]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID del documento
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - revisor_name
+ *             properties:
+ *               revisor_name:
+ *                 type: string
+ *                 description: Nombre del revisor
+ *               usuario_revisor:
+ *                 type: integer
+ *                 description: ID del usuario que revisa (opcional, para usar su firma)
+ *     responses:
+ *       200:
+ *         description: Documento revisado exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 signed_file_path:
+ *                   type: string
+ *                 download_url:
+ *                   type: string
+ *       400:
+ *         description: Error de validación o documento no aprobado
+ *       404:
+ *         description: Documento no encontrado
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.post('/:id/revisar', DocumentoController.revisarDocumento);
 
 module.exports = router;

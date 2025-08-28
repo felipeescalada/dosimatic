@@ -29,6 +29,13 @@ class AppDrawer extends StatelessWidget {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.article),
+            title: const Text('Documentos'),
+            onTap: () {
+              Navigator.pushReplacementNamed(context, '/documentos');
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.contacts),
             title: const Text('Contactos 1'),
             onTap: () {

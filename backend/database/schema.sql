@@ -104,6 +104,43 @@ CREATE TRIGGER update_gestiones_updated_at
     BEFORE UPDATE ON gestiones 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Nuevas tablas para sistema de gestión documental con versiones
+-- Tabla principal de documentos (simplificada para el nuevo sistema)
+CREATE TABLE IF NOT EXISTS documents (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de versiones de documentos
+CREATE TABLE IF NOT EXISTS document_versions (
+    id SERIAL PRIMARY KEY,
+    document_id INT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    version INT NOT NULL,
+    original_filename VARCHAR(255) NOT NULL,
+    storage_path VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(100),
+    size_bytes BIGINT,
+    is_signed BOOLEAN DEFAULT false,
+    signed_pdf_path VARCHAR(500),
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(document_id, version)
+);
+
+-- Índices para el nuevo sistema
+CREATE INDEX IF NOT EXISTS idx_document_versions_document_id ON document_versions(document_id);
+CREATE INDEX IF NOT EXISTS idx_document_versions_version ON document_versions(document_id, version);
+CREATE INDEX IF NOT EXISTS idx_documents_created_by ON documents(created_by);
+
+-- Trigger para actualizar updated_at en documents
+DROP TRIGGER IF EXISTS update_documents_updated_at ON documents;
+CREATE TRIGGER update_documents_updated_at 
+    BEFORE UPDATE ON documents 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Insertar datos de ejemplo solo si no existen
 INSERT INTO gestiones (nombre, descripcion) 
 SELECT * FROM (VALUES 
