@@ -158,7 +158,25 @@ router.post('/', uploadDocumentFiles, handleMulterError, DocumentoController.cre
  *         description: Offset para paginación
  *     responses:
  *       200:
- *         description: Lista de documentos
+ *         description: Lista de documentos con paginación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Documento'
+ *                 total:
+ *                   type: integer
+ *                   description: Total de documentos que coinciden con el filtro
+ *                 pages:
+ *                   type: integer
+ *                 currentPage:
+ *                   type: integer
  *       500:
  *         description: Error interno del servidor
  */
