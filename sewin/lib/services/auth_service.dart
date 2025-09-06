@@ -167,4 +167,56 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(tokenKey);
   }
+
+  Future<bool> isAuthenticated() async {
+    final token = await getToken();
+    print('DEBUG AuthService: Token obtenido: ${token != null ? "SÍ" : "NO"}');
+
+    if (token == null) {
+      print('DEBUG AuthService: No hay token, retornando false');
+      return false;
+    }
+
+    // Verificar si el token no ha expirado
+    try {
+      final tokenParts = token.split('.');
+      print('DEBUG AuthService: Token tiene ${tokenParts.length} partes');
+
+      if (tokenParts.length != 3) {
+        print('DEBUG AuthService: Token inválido (no tiene 3 partes)');
+        return false;
+      }
+
+      final payload = json.decode(
+        utf8.decode(
+          base64Url.decode(
+            base64Url.normalize(tokenParts[1]),
+          ),
+        ),
+      );
+
+      print('DEBUG AuthService: Payload decodificado: $payload');
+
+      final exp = payload['exp'];
+      print('DEBUG AuthService: Expiración del token: $exp');
+
+      if (exp == null) {
+        print('DEBUG AuthService: Token sin fecha de expiración');
+        return false;
+      }
+
+      final expirationDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      final now = DateTime.now();
+      final isValid = now.isBefore(expirationDate);
+
+      print('DEBUG AuthService: Fecha actual: $now');
+      print('DEBUG AuthService: Fecha expiración: $expirationDate');
+      print('DEBUG AuthService: Token válido: $isValid');
+
+      return isValid;
+    } catch (e) {
+      print('DEBUG AuthService: Error al validar token: $e');
+      return false;
+    }
+  }
 }

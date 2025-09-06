@@ -51,9 +51,60 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _authService = AuthService();
   bool _isLoading = false;
+  bool _isCheckingAuth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthenticationStatus();
+  }
+
+  Future<void> _checkAuthenticationStatus() async {
+    try {
+      final token = await _authService.getToken();
+      print('DEBUG: Token encontrado: ${token != null ? "SÍ" : "NO"}');
+      if (token != null) {
+        print('DEBUG: Token: ${token.substring(0, 20)}...');
+      }
+
+      final isAuthenticated = await _authService.isAuthenticated();
+      print('DEBUG: Usuario autenticado: $isAuthenticated');
+
+      if (mounted) {
+        if (isAuthenticated) {
+          print('DEBUG: Redirigiendo a ContactListScreen');
+          // Usuario ya está autenticado, redirigir a ContactListScreen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const ContactListScreen()),
+          );
+        } else {
+          print('DEBUG: Mostrando formulario de login');
+          // Usuario no está autenticado, mostrar formulario de login
+          setState(() {
+            _isCheckingAuth = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('DEBUG: Error en _checkAuthenticationStatus: $e');
+      setState(() {
+        _isCheckingAuth = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Mostrar loading mientras se verifica la autenticación
+    if (_isCheckingAuth) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Stack(
         children: [
@@ -201,6 +252,23 @@ class _LoginScreenState extends State<LoginScreen> {
                                             color: Colors.white,
                                           ),
                                         ),
+                                ),
+                                const SizedBox(height: 16),
+                                // Botón temporal para limpiar estado durante debugging
+                                TextButton(
+                                  onPressed: () async {
+                                    await _authService.logout();
+                                    print(
+                                        'DEBUG: Estado de autenticación limpiado');
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text('Estado limpiado')),
+                                    );
+                                  },
+                                  child: const Text(
+                                    'Limpiar Estado (Debug)',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
                                 ),
                               ],
                             ),
