@@ -72,15 +72,20 @@ const nodemailer = require('nodemailer');
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    
+    const user = await pool.query('SELECT * FROM usuarios WHERE email = $1', [
+      email
+    ]);
+
     if (user.rows.length === 0) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'Credenciales inválidas' });
     }
 
-    const validPassword = await bcrypt.compare(password, user.rows[0].password);
+    const validPassword = await bcrypt.compare(
+      password,
+      user.rows[0].password || ''
+    );
     if (!validPassword) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'Credenciales inválidas' });
     }
 
     const token = jwt.sign(
@@ -119,8 +124,10 @@ router.post('/login', async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
-    const user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    
+    const user = await pool.query('SELECT * FROM usuarios WHERE email = $1', [
+      email
+    ]);
+
     if (user.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -132,7 +139,7 @@ router.post('/forgot-password', async (req, res) => {
     );
 
     await pool.query(
-      'UPDATE users SET reset_token = $1, reset_token_expires = NOW() + interval \'1 hour\' WHERE id = $2',
+      "UPDATE usuarios SET reset_token = $1, reset_token_expires = NOW() + interval '1 hour' WHERE id = $2",
       [resetToken, user.rows[0].id]
     );
 
@@ -183,20 +190,25 @@ router.post('/forgot-password', async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
-    
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || 'your-secret-key'
+    );
     const user = await pool.query(
-      'SELECT * FROM users WHERE id = $1 AND reset_token = $2 AND reset_token_expires > NOW()',
+      'SELECT * FROM usuarios WHERE id = $1 AND reset_token = $2 AND reset_token_expires > NOW()',
       [decoded.id, token]
     );
 
     if (user.rows.length === 0) {
-      return res.status(400).json({ message: 'Invalid or expired reset token' });
+      return res
+        .status(400)
+        .json({ message: 'Invalid or expired reset token' });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await pool.query(
-      'UPDATE users SET password = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
+      'UPDATE usuarios SET password = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
       [hashedPassword, decoded.id]
     );
 
