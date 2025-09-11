@@ -2,14 +2,60 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { query } = require('../config/database');
+const { query, getClient } = require('../config/database');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
 
+// Centralized logging utilities
+const logger = {
+  success: msg => console.log(`✅ ${msg}`),
+  error: msg => console.error(`❌ ${msg}`),
+  info: msg => console.log(`ℹ️ ${msg}`),
+  warning: msg => console.log(`⚠️ ${msg}`)
+};
+
+// Common response helpers
+const responses = {
+  success: (res, data, message = 'Success') => {
+    res.json({ success: true, message, data });
+  },
+  error: (res, status, message, details = null) => {
+    const response = { success: false, message };
+    if (details && process.env.NODE_ENV === 'development') {
+      response.error = details;
+    }
+    res.status(status).json(response);
+  },
+  notFound: (res, resource = 'Resource') => {
+    res
+      .status(404)
+      .json({ success: false, message: `${resource} no encontrado` });
+  }
+};
+
+// Common validation helpers
+const validators = {
+  async userExists(id) {
+    const result = await query(
+      'SELECT id, nombre as name FROM usuarios WHERE id = $1',
+      [id]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  },
+  async emailExists(email) {
+    const result = await query('SELECT id FROM usuarios WHERE email = $1', [
+      email
+    ]);
+    return result.rows.length > 0;
+  }
+};
+
 // Configuración de multer para subida de imágenes de firma
-const signatureDir = path.join(process.env.SIGNATURES_PATH || path.join(__dirname, '../../signatures'));
+const signatureDir = path.join(
+  process.env.SIGNATURES_PATH || path.join(__dirname, '../../signatures')
+);
 
 // Asegurarse de que el directorio existe
 if (!fs.existsSync(signatureDir)) {
@@ -25,7 +71,7 @@ const signatureStorage = multer.diskStorage({
     const userId = req.params.id;
     const ext = path.extname(file.originalname).toLowerCase();
     const filename = `user_${userId}_signature${ext}`;
-    console.log(`📝 Guardando firma como: ${filename}`);
+    logger.info(`Guardando firma como: ${filename}`);
     cb(null, filename);
   }
 });
@@ -37,7 +83,9 @@ const uploadSignature = multer({
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const extname = allowedTypes.test(
+      path.extname(file.originalname).toLowerCase()
+    );
     const mimetype = allowedTypes.test(file.mimetype);
 
     if (mimetype && extname) {
@@ -80,59 +128,59 @@ const uploadSignature = multer({
  *       404:
  *         description: Usuario no encontrado
  */
-router.post('/:id/signature', uploadSignature.single('signature'), async (req, res) => {
-  try {
-    const { id } = req.params;
+router.post(
+  '/:id/signature',
+  uploadSignature.single('signature'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No se proporcionó archivo de imagen'
-      });
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'No se proporcionó archivo de imagen'
+        });
+      }
+
+      // Verificar que el usuario existe
+      const user = await validators.userExists(id);
+      if (!user) {
+        // Eliminar archivo subido si el usuario no existe
+        fs.unlinkSync(req.file.path);
+        return responses.notFound(res, 'Usuario');
+      }
+
+      // Actualizar ruta de imagen de firma en la base de datos
+      const signaturePath = path.join('signatures', req.file.filename);
+      logger.info(
+        `Actualizando firma en DB para usuario ${id}: ${signaturePath}`
+      );
+
+      await query(
+        'UPDATE usuarios SET signature_image = $1 WHERE id = $2 RETURNING *',
+        [signaturePath, id]
+      );
+
+      responses.success(
+        res,
+        {
+          signature_path: signaturePath,
+          user: user.name
+        },
+        'Imagen de firma subida exitosamente'
+      );
+    } catch (error) {
+      logger.error(`Error subiendo imagen de firma: ${error.message}`);
+
+      // Eliminar archivo si hubo error
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      responses.error(res, 500, 'Error interno del servidor', error.message);
     }
-
-    // Verificar que el usuario existe
-    const userResult = await query('SELECT id, name FROM users WHERE id = $1', [id]);
-    if (userResult.rows.length === 0) {
-      // Eliminar archivo subido si el usuario no existe
-      fs.unlinkSync(req.file.path);
-      return res.status(404).json({
-        success: false,
-        message: 'Usuario no encontrado'
-      });
-    }
-
-    // Actualizar ruta de imagen de firma en la base de datos
-    const signaturePath = path.join('signatures', req.file.filename);
-    console.log(`💾 Actualizando firma en DB para usuario ${id}: ${signaturePath}`);
-    
-    await query(
-      'UPDATE users SET signature_image = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-      [signaturePath, id]
-    );
-
-    res.json({
-      success: true,
-      message: 'Imagen de firma subida exitosamente',
-      signature_path: signaturePath,
-      user: userResult.rows[0].name
-    });
-
-  } catch (error) {
-    console.error('Error subiendo imagen de firma:', error);
-    
-    // Eliminar archivo si hubo error
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Error interno del servidor',
-      error: error.message
-    });
   }
-});
+);
 
 /**
  * @swagger
@@ -157,29 +205,20 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
+    logger.info(`Fetching user with id: ${id}`);
     const result = await query(
-      'SELECT id, name, email, rol, signature_image, activo, fecha_creacion FROM users WHERE id = $1',
+      'SELECT id, nombre, email, rol, activo, fecha_creacion FROM usuarios WHERE id = $1',
       [id]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Usuario no encontrado'
-      });
+      return responses.notFound(res, 'Usuario');
     }
 
-    res.json({
-      success: true,
-      data: result.rows[0]
-    });
-
+    responses.success(res, result.rows[0]);
   } catch (error) {
-    console.error('Error obteniendo usuario:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error interno del servidor'
-    });
+    logger.error(`Error obteniendo usuario: ${error.message}`);
+    responses.error(res, 500, 'Error interno del servidor', error.message);
   }
 });
 
@@ -195,21 +234,18 @@ router.get('/:id', async (req, res) => {
  */
 router.get('/', async (req, res) => {
   try {
+    logger.info('Fetching users from database...');
+
     const result = await query(
-      'SELECT id, name, email, rol, signature_image, activo, fecha_creacion FROM users WHERE activo = true ORDER BY name'
+      'SELECT id, nombre, email, rol, activo, fecha_creacion FROM usuarios WHERE activo = true ORDER BY nombre'
     );
 
-    res.json({
-      success: true,
-      data: result.rows
-    });
+    logger.info(`Found ${result.rows.length} users`);
 
+    responses.success(res, result.rows);
   } catch (error) {
-    console.error('Error obteniendo usuarios:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error interno del servidor'
-    });
+    logger.error(`Error obteniendo usuarios: ${error.message}`);
+    responses.error(res, 500, 'Error interno del servidor', error.message);
   }
 });
 
@@ -263,12 +299,12 @@ router.post('/', async (req, res) => {
     }
 
     // Verificar si el email ya existe
-    const userExists = await query('SELECT id FROM users WHERE email = $1', [email]);
-    if (userExists.rows.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'El correo electrónico ya está registrado'
-      });
+    if (await validators.emailExists(email)) {
+      return responses.error(
+        res,
+        400,
+        'El correo electrónico ya está registrado'
+      );
     }
 
     // Hash de la contraseña
@@ -277,10 +313,10 @@ router.post('/', async (req, res) => {
 
     // Crear usuario
     const result = await query(
-      `INSERT INTO users (name, email, password, role, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW()) 
-       RETURNING id, name, email, role, created_at`,
-      [name, email, hashedPassword, role || 'user']
+      `INSERT INTO usuarios (nombre, email, password, rol, fecha_creacion)
+       VALUES ($1, $2, $3, $4, NOW()) 
+       RETURNING id, nombre as name, email, rol as role, fecha_creacion as created_at`,
+      [name, email, hashedPassword, role || 'usuario']
     );
 
     // No devolver la contraseña
@@ -290,16 +326,11 @@ router.post('/', async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Usuario creado exitosamente',
-      user: newUser
+      data: newUser
     });
-
   } catch (error) {
-    console.error('Error al crear usuario:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error al crear el usuario',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    logger.error(`Error al crear usuario: ${error.message}`);
+    responses.error(res, 500, 'Error al crear el usuario', error.message);
   }
 });
 
