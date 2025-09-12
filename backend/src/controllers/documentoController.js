@@ -9,8 +9,17 @@ const createDocumentoSchema = Joi.object({
   nombre: Joi.string().required().max(255),
   descripcion: Joi.string().optional(),
   gestion_id: Joi.number().integer().positive().required(),
-  convencion: Joi.string().valid('Manual', 'Procedimiento', 'Instructivo', 'Formato', 'Documento Externo').required(),
-  usuario_creador: Joi.number().integer().positive().required()
+  convencion: Joi.string()
+    .valid(
+      'Manual',
+      'Procedimiento',
+      'Instructivo',
+      'Formato',
+      'Documento Externo'
+    )
+    .required(),
+  usuario_creador: Joi.number().integer().positive().required(),
+  archivo_fuente: Joi.string().optional().max(255)
 });
 
 // Esquema de validación para actualizar documento
@@ -18,8 +27,23 @@ const updateDocumentoSchema = Joi.object({
   nombre: Joi.string().max(255).optional(),
   descripcion: Joi.string().optional(),
   gestion_id: Joi.number().integer().positive().optional(),
-  convencion: Joi.string().valid('Manual', 'Procedimiento', 'Instructivo', 'Formato', 'Documento Externo').optional(),
-  estado: Joi.string().valid('pendiente_revision', 'pendiente_aprobacion', 'aprobado', 'rechazado').optional(),
+  convencion: Joi.string()
+    .valid(
+      'Manual',
+      'Procedimiento',
+      'Instructivo',
+      'Formato',
+      'Documento Externo'
+    )
+    .optional(),
+  estado: Joi.string()
+    .valid(
+      'pendiente_revision',
+      'pendiente_aprobacion',
+      'aprobado',
+      'rechazado'
+    )
+    .optional(),
   usuario_revisor: Joi.number().integer().positive().optional(),
   usuario_aprobador: Joi.number().integer().positive().optional(),
   comentarios_revision: Joi.string().optional(),
@@ -41,6 +65,7 @@ class DocumentoController {
       // Validar datos de entrada
       const { error, value } = createDocumentoSchema.validate(req.body);
       if (error) {
+        console.log('Validation error:', error.details);
         return res.status(400).json({
           success: false,
           message: 'Datos inválidos',
@@ -50,7 +75,7 @@ class DocumentoController {
 
       // Procesar archivos subidos
       const documentoData = { ...value };
-      
+
       if (req.files) {
         if (req.files.archivo_fuente) {
           documentoData.archivo_fuente = req.files.archivo_fuente[0].filename;
@@ -68,10 +93,9 @@ class DocumentoController {
         message: 'Documento creado exitosamente',
         data: documento
       });
-
     } catch (error) {
       console.error('Error creando documento:', error);
-      
+
       // Limpiar archivos subidos si hay error
       if (req.files) {
         try {
@@ -83,7 +107,8 @@ class DocumentoController {
         }
       }
 
-      if (error.code === '23505') { // Código único violado
+      if (error.code === '23505') {
+        // Código único violado
         return res.status(400).json({
           success: false,
           message: 'El código del documento ya existe'
@@ -103,7 +128,9 @@ class DocumentoController {
       const filters = {
         codigo: req.query.codigo,
         nombre: req.query.nombre,
-        gestion_id: req.query.gestion_id ? parseInt(req.query.gestion_id) : undefined,
+        gestion_id: req.query.gestion_id
+          ? parseInt(req.query.gestion_id)
+          : undefined,
         convencion: req.query.convencion,
         estado: req.query.estado,
         limit: req.query.limit ? parseInt(req.query.limit) : 50,
@@ -128,7 +155,6 @@ class DocumentoController {
           total: documentos.length
         }
       });
-
     } catch (error) {
       console.error('Error obteniendo documentos:', error);
       res.status(500).json({
@@ -142,7 +168,7 @@ class DocumentoController {
   static async getById(req, res) {
     try {
       const { id } = req.params;
-      
+
       if (!id || isNaN(parseInt(id))) {
         return res.status(400).json({
           success: false,
@@ -163,7 +189,6 @@ class DocumentoController {
         success: true,
         data: documento
       });
-
     } catch (error) {
       console.error('Error obteniendo documento:', error);
       res.status(500).json({
@@ -198,7 +223,7 @@ class DocumentoController {
 
       // Procesar archivos subidos
       const updateData = { ...value };
-      
+
       if (req.files) {
         if (req.files.archivo_fuente) {
           updateData.archivo_fuente = req.files.archivo_fuente[0].filename;
@@ -209,17 +234,20 @@ class DocumentoController {
       }
 
       // Actualizar documento
-      const documento = await Documento.update(parseInt(id), updateData, usuarioId);
+      const documento = await Documento.update(
+        parseInt(id),
+        updateData,
+        usuarioId
+      );
 
       res.json({
         success: true,
         message: 'Documento actualizado exitosamente',
         data: documento
       });
-
     } catch (error) {
       console.error('Error actualizando documento:', error);
-      
+
       // Limpiar archivos subidos si hay error
       if (req.files) {
         await this.cleanupUploadedFiles(req.files);
@@ -264,10 +292,9 @@ class DocumentoController {
         success: true,
         message: 'Documento eliminado exitosamente'
       });
-
     } catch (error) {
       console.error('Error eliminando documento:', error);
-      
+
       if (error.message.includes('documentos vinculados')) {
         return res.status(400).json({
           success: false,
@@ -300,7 +327,6 @@ class DocumentoController {
         success: true,
         data: historico
       });
-
     } catch (error) {
       console.error('Error obteniendo histórico:', error);
       res.status(500).json({
@@ -331,8 +357,8 @@ class DocumentoController {
       }
 
       const documento = await Documento.marcarRevisado(
-        parseInt(id), 
-        usuario_revisor, 
+        parseInt(id),
+        usuario_revisor,
         comentarios
       );
 
@@ -341,7 +367,6 @@ class DocumentoController {
         message: 'Documento marcado como revisado',
         data: documento
       });
-
     } catch (error) {
       console.error('Error marcando como revisado:', error);
       res.status(500).json({
@@ -372,8 +397,8 @@ class DocumentoController {
       }
 
       const documento = await Documento.marcarAprobado(
-        parseInt(id), 
-        usuario_aprobador, 
+        parseInt(id),
+        usuario_aprobador,
         comentarios
       );
 
@@ -382,7 +407,6 @@ class DocumentoController {
         message: 'Documento aprobado exitosamente',
         data: documento
       });
-
     } catch (error) {
       console.error('Error aprobando documento:', error);
       res.status(500).json({
@@ -413,8 +437,8 @@ class DocumentoController {
       }
 
       const documento = await Documento.rechazar(
-        parseInt(id), 
-        usuario_id, 
+        parseInt(id),
+        usuario_id,
         comentarios
       );
 
@@ -423,7 +447,6 @@ class DocumentoController {
         message: 'Documento rechazado',
         data: documento
       });
-
     } catch (error) {
       console.error('Error rechazando documento:', error);
       res.status(500).json({
@@ -442,7 +465,6 @@ class DocumentoController {
         success: true,
         data: documentos
       });
-
     } catch (error) {
       console.error('Error obteniendo pendientes de revisión:', error);
       res.status(500).json({
@@ -461,7 +483,6 @@ class DocumentoController {
         success: true,
         data: documentos
       });
-
     } catch (error) {
       console.error('Error obteniendo pendientes de aprobación:', error);
       res.status(500).json({
@@ -527,29 +548,34 @@ class DocumentoController {
 
       try {
         await fs.access(filePath);
-        
+
         // Determinar el tipo de contenido basado en la extensión del archivo
         const ext = path.extname(fileName).toLowerCase();
         let contentType = 'application/octet-stream';
         let downloadName = fileName;
-        
+
         if (ext === '.docx') {
-          contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          contentType =
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         } else if (ext === '.doc') {
           contentType = 'application/msword';
         } else if (ext === '.pdf') {
           contentType = 'application/pdf';
         } else if (ext === '.xlsx') {
-          contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          contentType =
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
         } else if (ext === '.xls') {
           contentType = 'application/vnd.ms-excel';
         }
-        
+
         // Configurar headers para descarga
         res.setHeader('Content-Type', contentType);
-        res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${downloadName}"`
+        );
         res.setHeader('Cache-Control', 'no-cache');
-        
+
         res.download(filePath, downloadName);
       } catch (error) {
         res.status(404).json({
@@ -557,7 +583,6 @@ class DocumentoController {
           message: 'Archivo no encontrado en el servidor'
         });
       }
-
     } catch (error) {
       console.error('Error descargando archivo:', error);
       res.status(500).json({
@@ -616,16 +641,24 @@ class DocumentoController {
       }
 
       const { changeExtToPdf, docxToPdf } = require('../../lib/convert');
-      const filePath = path.join(process.env.UPLOADS_PATH || 'uploads', archivoFuente);
-      const pdfPath = changeExtToPdf(filePath, path.join(process.env.UPLOADS_PATH || 'uploads'));
+      const filePath = path.join(
+        process.env.UPLOADS_PATH || 'uploads',
+        archivoFuente
+      );
+      const pdfPath = changeExtToPdf(
+        filePath,
+        path.join(process.env.UPLOADS_PATH || 'uploads')
+      );
 
       try {
         await fs.access(filePath);
         await docxToPdf(filePath, pdfPath);
-        
+
         // Actualizar documento con la ruta del PDF
-        await Documento.update(parseInt(id), { archivo_pdf: path.basename(pdfPath) });
-        
+        await Documento.update(parseInt(id), {
+          archivo_pdf: path.basename(pdfPath)
+        });
+
         res.json({
           success: true,
           message: 'Documento convertido a PDF exitosamente',
@@ -638,7 +671,6 @@ class DocumentoController {
           message: 'Error convirtiendo archivo a PDF'
         });
       }
-
     } catch (error) {
       console.error('Error convirtiendo a PDF:', error);
       res.status(500).json({
@@ -680,7 +712,8 @@ class DocumentoController {
       if (documento.estado !== 'pendiente_revision') {
         return res.status(400).json({
           success: false,
-          message: 'Solo se pueden revisar documentos en estado "pendiente_revision"'
+          message:
+            'Solo se pueden revisar documentos en estado "pendiente_revision"'
         });
       }
 
@@ -696,36 +729,48 @@ class DocumentoController {
       const { exec } = require('child_process');
       const { promisify } = require('util');
       const execAsync = promisify(exec);
-      
+
       const SIGNED_DIR = resolvePath(process.env.SIGNED_DIR || './signed');
-      const inputPath = path.join(process.env.UPLOADS_PATH || 'uploads', archivoFuente);
+      const inputPath = path.join(
+        process.env.UPLOADS_PATH || 'uploads',
+        archivoFuente
+      );
       const ext = path.extname(archivoFuente);
       const signedFileName = `${documento.codigo}_v${documento.version}_revisado${ext}`;
       const signedPath = path.join(SIGNED_DIR, signedFileName);
 
       // Obtener imagen de firma del revisor o usar firma por defecto
       let signatureImagePath = null;
-      
+
       if (usuario_revisor) {
         try {
           const { query } = require('../../lib/db');
-          const result = await query('SELECT signature_image FROM users WHERE id = $1', [usuario_revisor]);
-          
+          const result = await query(
+            'SELECT signature_image FROM usuarios WHERE id = $1',
+            [usuario_revisor]
+          );
+
           if (result.rows.length > 0 && result.rows[0].signature_image) {
-            const userSignaturePath = path.join(process.cwd(), result.rows[0].signature_image);
-            
+            const userSignaturePath = path.join(
+              process.cwd(),
+              result.rows[0].signature_image
+            );
+
             try {
               await fs.access(userSignaturePath);
               signatureImagePath = userSignaturePath;
             } catch (error) {
-              console.warn('Imagen de firma de revisor no encontrada:', userSignaturePath);
+              console.warn(
+                'Imagen de firma de revisor no encontrada:',
+                userSignaturePath
+              );
             }
           }
         } catch (error) {
           console.warn('Error obteniendo firma de revisor:', error.message);
         }
       }
-      
+
       // Crear directorio signatures si no existe
       const signaturesDir = process.env.SIGNATURES_PATH || 'signatures';
       try {
@@ -736,32 +781,46 @@ class DocumentoController {
 
       // Usar script Python para firmar Word/Excel directamente
       if (ext.toLowerCase() === '.docx' || ext.toLowerCase() === '.doc') {
-        const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'firmar_word.py');
-        
-        const command = signatureImagePath 
+        const scriptPath = path.join(
+          __dirname,
+          '..',
+          '..',
+          'scripts',
+          'firmar_word.py'
+        );
+
+        const command = signatureImagePath
           ? `python3 "${scriptPath}" "${inputPath}" "${signatureImagePath}" "${signedPath}" "${revisor_name}"`
           : `python3 "${scriptPath}" "${inputPath}" "" "${signedPath}" "${revisor_name}"`;
-        
+
         const { stdout, stderr } = await execAsync(command);
-        
+
         if (stderr && !stderr.includes('Warning')) {
           throw new Error(`Error en script Python: ${stderr}`);
         }
-      } else if (ext.toLowerCase() === '.xlsx' || ext.toLowerCase() === '.xls') {
+      } else if (
+        ext.toLowerCase() === '.xlsx' ||
+        ext.toLowerCase() === '.xls'
+      ) {
         // Para Excel, usar DocumentSigner
         const DocumentSigner = require('../../lib/documentSigner');
         const signer = new DocumentSigner();
-        await signer.signDocument(inputPath, signedPath, revisor_name, signatureImagePath);
+        await signer.signDocument(
+          inputPath,
+          signedPath,
+          revisor_name,
+          signatureImagePath
+        );
       } else {
         return res.status(400).json({
           success: false,
           message: `Formato no soportado para revisión: ${ext}. Solo se admiten .docx, .doc, .xlsx, .xls`
         });
       }
-      
+
       // Verificar que se creó el archivo revisado
       await fs.access(signedPath);
-      
+
       // Actualizar documento como revisado
       await Documento.update(parseInt(id), {
         estado: 'pendiente_aprobacion',
@@ -776,10 +835,9 @@ class DocumentoController {
         signed_file_path: path.basename(signedPath),
         download_url: `/api/documentos/${id}/download/reviewed`
       });
-
     } catch (error) {
       console.error('Error revisando documento:', error);
-      
+
       // Limpiar archivo firmado si hubo error
       if (signedPath) {
         try {
@@ -792,7 +850,8 @@ class DocumentoController {
       res.status(500).json({
         success: false,
         message: 'Error interno del servidor al revisar el documento',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        error:
+          process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
@@ -845,46 +904,67 @@ class DocumentoController {
       const { exec } = require('child_process');
       const { promisify } = require('util');
       const execAsync = promisify(exec);
-      
+
       const SIGNED_DIR = resolvePath(process.env.SIGNED_DIR || './signed');
-      const inputPath = path.join(process.env.UPLOADS_PATH || 'uploads', archivoFuente);
+      const inputPath = path.join(
+        process.env.UPLOADS_PATH || 'uploads',
+        archivoFuente
+      );
       const ext = path.extname(archivoFuente);
       const signedFileName = `${documento.codigo}_v${documento.version}_signed${ext}`;
       const signedPath = path.join(SIGNED_DIR, signedFileName);
 
       // Obtener imagen de firma del usuario o usar firma por defecto
       let signatureImagePath = null;
-      
+
       console.log('🔍 Debug firma - usuario_firmante:', usuario_firmante);
-      
+
       if (usuario_firmante) {
         try {
           const { query } = require('../../lib/db');
-          const result = await query('SELECT signature_image FROM users WHERE id = $1', [usuario_firmante]);
+          const result = await query(
+            'SELECT signature_image FROM usuarios WHERE id = $1',
+            [usuario_firmante]
+          );
           console.log('🔍 Debug firma - resultado DB:', result.rows);
-          
+
           if (result.rows.length > 0 && result.rows[0].signature_image) {
             // Usar path.join para construir la ruta relativa
-            const userSignaturePath = path.join(process.cwd(), result.rows[0].signature_image);
+            const userSignaturePath = path.join(
+              process.cwd(),
+              result.rows[0].signature_image
+            );
             console.log('🔍 Debug firma - ruta construida:', userSignaturePath);
-            
+
             // Verificar que existe la imagen del usuario
             try {
               await fs.access(userSignaturePath);
               signatureImagePath = userSignaturePath;
-              console.log('✅ Debug firma - imagen encontrada:', signatureImagePath);
+              console.log(
+                '✅ Debug firma - imagen encontrada:',
+                signatureImagePath
+              );
             } catch (error) {
-              console.warn('❌ Imagen de firma de usuario no encontrada:', userSignaturePath);
+              console.warn(
+                '❌ Imagen de firma de usuario no encontrada:',
+                userSignaturePath
+              );
               console.warn('Error:', error.message);
-              
+
               // Intentar con ruta relativa como último recurso
               const relativePath = result.rows[0].signature_image;
               try {
                 await fs.access(relativePath);
                 signatureImagePath = relativePath;
-                console.log('✅ Debug firma - imagen encontrada (ruta relativa):', relativePath);
+                console.log(
+                  '✅ Debug firma - imagen encontrada (ruta relativa):',
+                  relativePath
+                );
               } catch (e) {
-                console.warn('❌ No se pudo acceder a la imagen con ruta relativa:', relativePath);
+                console.warn(
+                  '❌ No se pudo acceder a la imagen con ruta relativa:',
+                  relativePath
+                );
               }
             }
           } else {
@@ -896,7 +976,7 @@ class DocumentoController {
       } else {
         console.log('❌ Debug firma - no se proporcionó usuario_firmante');
       }
-      
+
       // Crear directorio signatures si no existe
       const signaturesDir = process.env.SIGNATURES_PATH || 'signatures';
       try {
@@ -907,15 +987,21 @@ class DocumentoController {
 
       // Usar script Python para firmar Word/Excel directamente
       if (ext.toLowerCase() === '.docx' || ext.toLowerCase() === '.doc') {
-        const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'firmar_word.py');
-        
+        const scriptPath = path.join(
+          __dirname,
+          '..',
+          '..',
+          'scripts',
+          'firmar_word.py'
+        );
+
         // Si no hay imagen de firma, crear una firma de texto simple
         if (!signatureImagePath) {
           console.log('Firmando documento sin imagen de firma, solo con texto');
           // Crear comando sin imagen de firma - el script Python manejará esto
           const command = `python3 "${scriptPath}" "${inputPath}" "" "${signedPath}" "${signer_name}"`;
           const { stdout, stderr } = await execAsync(command);
-          
+
           if (stderr && !stderr.includes('Warning')) {
             throw new Error(`Error en script Python: ${stderr}`);
           }
@@ -923,26 +1009,34 @@ class DocumentoController {
           // Firmar con imagen
           const command = `python3 "${scriptPath}" "${inputPath}" "${signatureImagePath}" "${signedPath}" "${signer_name}"`;
           const { stdout, stderr } = await execAsync(command);
-          
+
           if (stderr && !stderr.includes('Warning')) {
             throw new Error(`Error en script Python: ${stderr}`);
           }
         }
-      } else if (ext.toLowerCase() === '.xlsx' || ext.toLowerCase() === '.xls') {
+      } else if (
+        ext.toLowerCase() === '.xlsx' ||
+        ext.toLowerCase() === '.xls'
+      ) {
         // Para Excel, usar DocumentSigner
         const DocumentSigner = require('../../lib/documentSigner');
         const signer = new DocumentSigner();
-        await signer.signDocument(inputPath, signedPath, signer_name, signatureImagePath);
+        await signer.signDocument(
+          inputPath,
+          signedPath,
+          signer_name,
+          signatureImagePath
+        );
       } else {
         return res.status(400).json({
           success: false,
           message: `Formato no soportado para firma: ${ext}. Solo se admiten .docx, .doc, .xlsx, .xls`
         });
       }
-      
+
       // Verificar que se creó el archivo firmado
       await fs.access(signedPath);
-      
+
       // Actualizar documento como firmado
       await Documento.update(parseInt(id), {
         is_signed: true,
@@ -951,7 +1045,7 @@ class DocumentoController {
         signed_at: new Date(),
         usuario_firmante: usuario_firmante
       });
-      
+
       res.json({
         success: true,
         message: 'Documento firmado exitosamente',
@@ -976,7 +1070,6 @@ class DocumentoController {
         success: true,
         data: documentos
       });
-
     } catch (error) {
       console.error('Error obteniendo pendientes de revisión:', error);
       res.status(500).json({
@@ -995,7 +1088,6 @@ class DocumentoController {
         success: true,
         data: documentos
       });
-
     } catch (error) {
       console.error('Error obteniendo pendientes de aprobación:', error);
       res.status(500).json({
@@ -1004,7 +1096,6 @@ class DocumentoController {
       });
     }
   }
-
 }
 
 module.exports = {
