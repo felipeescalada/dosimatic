@@ -1,6 +1,7 @@
 import 'dart:convert' show json, base64Url, utf8;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sewin/services/logger_service.dart';
 
 class AuthService {
   static const String baseUrl = 'http://localhost:3500/api';
@@ -166,5 +167,39 @@ class AuthService {
   Future<void> _removeToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(tokenKey);
+  }
+
+  Future<Map<String, dynamic>?> getCurrentUser() async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return null;
+      }
+
+      // Decodificar el token para obtener la información del usuario
+      final tokenParts = token.split('.');
+      if (tokenParts.length != 3) {
+        return null;
+      }
+
+      // Decodificar el payload del token (segunda parte)
+      final payload = json.decode(
+        utf8.decode(
+          base64Url.decode(
+            base64Url.normalize(tokenParts[1]),
+          ),
+        ),
+      );
+
+      return {
+        'id': payload['id'],
+        'email': payload['email'],
+        'nombre': payload['nombre'] ?? payload['name'] ?? 'Usuario',
+        'rol': payload['rol'] ?? payload['role'] ?? 'user',
+      };
+    } catch (e) {
+      Logger.e('Error getting current user', error: e);
+      return null;
+    }
   }
 }
