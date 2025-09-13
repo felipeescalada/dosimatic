@@ -9,6 +9,7 @@ import 'screens/login_screen.dart';
 import 'screens/reset_password_form_screen.dart';
 import 'screens/signature_demo_screen.dart';
 import 'services/auth_guard.dart';
+import 'services/global_error_service.dart';
 import 'dart:html' as html;
 import 'dart:async';
 
@@ -45,6 +46,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
+      scaffoldMessengerKey: GlobalErrorService.scaffoldMessengerKey,
       title: 'Contact Manager',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
