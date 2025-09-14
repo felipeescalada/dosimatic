@@ -1,11 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:sewin/models/documento_model.dart';
+import 'package:sewin/services/documento_service.dart';
+import 'package:sewin/services/global_error_service.dart';
+import 'package:sewin/screens/documentos/documento_modal_form.dart';
 import 'package:sewin/widgets/app_drawer.dart';
-
-// Define la URL base del backend
-const String baseUrl = 'http://localhost:3500/api/documentos?limit=50&offset=0';
 
 class DocumentosPage extends StatefulWidget {
   const DocumentosPage({super.key});
@@ -17,8 +15,13 @@ class DocumentosPage extends StatefulWidget {
 class _DocumentosPageState extends State<DocumentosPage> {
   // Lista para almacenar los documentos
   List<Documento> _documentos = [];
+  List<Documento> _pendientesPorAprobar = [];
+  List<Documento> _pendientesPorRevisar = [];
+  int _pendientesRevisionCount = 0;
+  int _pendientesAprobacionCount = 0;
   bool _isLoading = true;
   String? _errorMessage;
+  String _selectedView = 'resumen'; // 'resumen', 'aprobar', 'revisar'
 
   @override
   void initState() {
@@ -34,31 +37,68 @@ class _DocumentosPageState extends State<DocumentosPage> {
     });
 
     try {
-      final response = await http.get(Uri.parse(baseUrl));
+      // Fetch all documents and pending counts in parallel
+      final results = await Future.wait([
+        DocumentoService.getDocumentos(limit: 50),
+        DocumentoService.getPendientesRevisionCount(),
+        DocumentoService.getPendientesAprobacionCount(),
+      ]);
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = json.decode(response.body);
+      final documentResult = results[0] as Map<String, dynamic>;
+      final documentos = documentResult['documentos'] as List<Documento>;
+      final revisionCount = results[1] as int;
+      final aprobacionCount = results[2] as int;
 
-        if (responseData['success'] == true) {
-          final List<dynamic> documentosJson = responseData['data'];
-          setState(() {
-            _documentos =
-                documentosJson.map((doc) => Documento.fromJson(doc)).toList();
-            _isLoading = false;
-          });
-        } else {
-          setState(() {
-            _errorMessage = 'Error al cargar los documentos';
-            _isLoading = false;
-          });
-        }
-      } else {
+      setState(() {
+        _documentos = documentos;
+        _pendientesRevisionCount = revisionCount;
+        _pendientesAprobacionCount = aprobacionCount;
+        // Keep local filtering as fallback
+        _pendientesPorAprobar =
+            documentos.where((doc) => doc.estado == 'en_revision').toList();
+        _pendientesPorRevisar =
+            documentos.where((doc) => doc.estado == 'borrador').toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error de conexión: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Función para obtener documentos filtrados por vista
+  Future<void> _fetchFilteredDocuments(String view) async {
+    if (view == 'resumen') {
+      _fetchDocuments();
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      List<Documento> filteredDocs;
+
+      if (view == 'aprobar') {
+        filteredDocs =
+            await DocumentoService.getPendientesAprobacion(limit: 50);
         setState(() {
-          _errorMessage =
-              'Error al cargar los documentos: ${response.statusCode}';
-          _isLoading = false;
+          _pendientesPorAprobar = filteredDocs;
+        });
+      } else if (view == 'revisar') {
+        filteredDocs = await DocumentoService.getPendientesRevision(limit: 50);
+        setState(() {
+          _pendientesPorRevisar = filteredDocs;
         });
       }
+
+      setState(() {
+        _isLoading = false;
+      });
     } catch (e) {
       setState(() {
         _errorMessage = 'Error de conexión: $e';
@@ -91,22 +131,16 @@ class _DocumentosPageState extends State<DocumentosPage> {
 
     if (confirm) {
       try {
-        final response = await http.delete(Uri.parse('$baseUrl/$id'));
-        if (response.statusCode == 204) {
+        final success = await DocumentoService.deleteDocumento(id);
+        if (success) {
           // Si la eliminación fue exitosa, recarga los documentos
           _fetchDocuments();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Documento eliminado con éxito.')),
-          );
+          GlobalErrorService.showSuccess('Documento eliminado con éxito.');
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error al eliminar el documento.')),
-          );
+          GlobalErrorService.showError('Error al eliminar el documento.');
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error de conexión: $e')),
-        );
+        GlobalErrorService.showError('Error de conexión: $e');
       }
     }
   }
@@ -117,148 +151,272 @@ class _DocumentosPageState extends State<DocumentosPage> {
       drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Gestión de Documentos'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchDocuments,
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () {
-              // Navegar a una pantalla de creación o mostrar un diálogo
-              // para agregar un nuevo documento.
-              _showAddEditDialog(context);
-            },
-          ),
-        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
-              ? Center(child: Text(_errorMessage!))
-              : SingleChildScrollView(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: PaginatedDataTable(
-                        header: const Text('Lista de Documentos'),
-                        columns: const <DataColumn>[
-                          DataColumn(label: Text('ID')),
-                          DataColumn(label: Text('Código')),
-                          DataColumn(label: Text('Nombre')),
-                          DataColumn(label: Text('Descripción')),
-                          DataColumn(label: Text('Convención')),
-                          DataColumn(label: Text('Gestión ID')),
-                          DataColumn(label: Text('Acciones')),
-                        ],
-                        source: DocumentosDataSource(
-                            _documentos,
-                            context,
-                            _fetchDocuments,
-                            _showAddEditDialog,
-                            _deleteDocumento),
-                        rowsPerPage: 10,
+      body: Row(
+        children: [
+          // Left Navbar
+          Container(
+            width: 280,
+            color: Colors.grey[100],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Agregar Documento Button
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: ElevatedButton(
+                    onPressed: () => _showAddEditDialog(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                    ),
+                    child: const Text(
+                      'Agregar Documento',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
-    );
-  }
 
-  // Diálogo para agregar o editar un documento
-  Future<void> _showAddEditDialog(BuildContext context,
-      {Documento? documento}) async {
-    final bool isEditing = documento != null;
-    final TextEditingController codigoController =
-        TextEditingController(text: isEditing ? documento.codigo : '');
-    final TextEditingController nombreController =
-        TextEditingController(text: isEditing ? documento.nombre : '');
-    final TextEditingController descripcionController =
-        TextEditingController(text: isEditing ? documento.descripcion : '');
-    final TextEditingController gestionController = TextEditingController(
-        text: isEditing ? documento.gestionId.toString() : '');
-    final TextEditingController convencionController =
-        TextEditingController(text: isEditing ? documento.convencion : '');
+                // RESUMEN Section
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 1,
+                        blurRadius: 3,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'RESUMEN',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
 
-    return showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(isEditing ? 'Editar Documento' : 'Agregar Documento'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                    controller: codigoController,
-                    decoration: const InputDecoration(labelText: 'Código')),
-                TextField(
-                    controller: nombreController,
-                    decoration: const InputDecoration(labelText: 'Nombre')),
-                TextField(
-                    controller: descripcionController,
-                    decoration:
-                        const InputDecoration(labelText: 'Descripción')),
-                TextField(
-                    controller: gestionController,
-                    decoration: const InputDecoration(labelText: 'Gestión ID')),
-                TextField(
-                    controller: convencionController,
-                    decoration: const InputDecoration(labelText: 'Convención')),
+                      // Pendientes por Aprobar
+                      InkWell(
+                        onTap: () {
+                          setState(() => _selectedView = 'aprobar');
+                          _fetchFilteredDocuments('aprobar');
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 8, horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: _selectedView == 'aprobar'
+                                ? Colors.orange[50]
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: const BoxDecoration(
+                                  color: Colors.orange,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '$_pendientesAprobacionCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Pendientes por Aprobar',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      // Pendientes por Revisar
+                      InkWell(
+                        onTap: () {
+                          setState(() => _selectedView = 'revisar');
+                          _fetchFilteredDocuments('revisar');
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 8, horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: _selectedView == 'revisar'
+                                ? Colors.red[50]
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '$_pendientesRevisionCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Pendientes por Revisar',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final newDoc = {
-                  'codigo': codigoController.text,
-                  'nombre': nombreController.text,
-                  'descripcion': descripcionController.text,
-                  'gestion_id': int.tryParse(gestionController.text) ?? 0,
-                  'convencion': convencionController.text,
-                  'vinculado_a': null, // Simplificado para este ejemplo
-                  'archivo_fuente': null,
-                  'archivo_pdf': null,
-                  'usuario_creador': 1, // Usuario de ejemplo
-                };
 
-                try {
-                  if (isEditing) {
-                    final response = await http.put(
-                      Uri.parse('$baseUrl/${documento.id}'),
-                      headers: {'Content-Type': 'application/json'},
-                      body: jsonEncode(newDoc),
-                    );
-                    if (response.statusCode == 200) {
-                      _fetchDocuments();
-                    }
-                  } else {
-                    final response = await http.post(
-                      Uri.parse(baseUrl),
-                      headers: {'Content-Type': 'application/json'},
-                      body: jsonEncode(newDoc),
-                    );
-                    if (response.statusCode == 201) {
-                      _fetchDocuments();
-                    }
-                  }
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error en la operación: $e')),
-                  );
-                }
-                Navigator.of(context).pop();
-              },
-              child: Text(isEditing ? 'Guardar' : 'Agregar'),
+          // Right Content Area
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              child: _buildRightContent(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRightContent() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Center(child: Text(_errorMessage!));
+    }
+
+    List<Documento> documentsToShow;
+    String title;
+
+    switch (_selectedView) {
+      case 'aprobar':
+        documentsToShow = _pendientesPorAprobar;
+        title = 'Pendientes por Aprobar';
+        break;
+      case 'revisar':
+        documentsToShow = _pendientesPorRevisar;
+        title = 'Pendientes por Revisar';
+        break;
+      default:
+        documentsToShow = _documentos;
+        title = 'Documentos (${_documentos.length})';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _fetchDocuments,
             ),
           ],
-        );
-      },
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            child: SingleChildScrollView(
+              child: PaginatedDataTable(
+                columns: const <DataColumn>[
+                  DataColumn(label: Text('ID')),
+                  DataColumn(label: Text('Código')),
+                  DataColumn(label: Text('Nombre')),
+                  DataColumn(label: Text('Estado')),
+                  DataColumn(label: Text('Descripción')),
+                  DataColumn(label: Text('Convención')),
+                  DataColumn(label: Text('Gestión')),
+                  DataColumn(label: Text('Fecha')),
+                  DataColumn(label: Text('Acciones')),
+                ],
+                source: DocumentosDataSource(
+                  documentsToShow,
+                  context,
+                  _fetchDocuments,
+                  _showAddEditDialog,
+                  _deleteDocumento,
+                ),
+                rowsPerPage: 10,
+                columnSpacing: 20,
+                horizontalMargin: 10,
+                showCheckboxColumn: false,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Diálogo para agregar o editar un documento usando DocumentoModalForm
+  Future<void> _showAddEditDialog(BuildContext context,
+      {Documento? documento}) async {
+    showDialog(
+      context: context,
+      builder: (context) => DocumentoModalForm(
+        documento: documento,
+        onSaved: () {
+          _fetchDocuments(); // Refresh the documents list after saving
+        },
+      ),
     );
   }
 }
@@ -290,9 +448,11 @@ class DocumentosDataSource extends DataTableSource {
         DataCell(Text(doc.id.toString())),
         DataCell(Text(doc.codigo)),
         DataCell(Text(doc.nombre)),
+        DataCell(Text(doc.estado)),
         DataCell(Text(doc.descripcion)),
         DataCell(Text(doc.convencion)),
-        DataCell(Text(doc.gestionId.toString())),
+        DataCell(Text(doc.gestionNombre)),
+        DataCell(Text(doc.fechaCreacion.toString().split(' ')[0])),
         DataCell(Row(
           children: [
             IconButton(
