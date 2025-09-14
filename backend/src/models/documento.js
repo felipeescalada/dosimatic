@@ -13,24 +13,33 @@ class Documento {
       convencion,
       archivo_fuente,
       archivo_pdf,
-      usuario_creador
+      usuario_creador,
+      vinculado_a
     } = documentoData;
 
     const sql = `
       INSERT INTO documentos (
         codigo, nombre, descripcion, gestion_id, convencion, 
-        archivo_fuente, archivo_pdf, usuario_creador,
+        archivo_fuente, archivo_pdf, usuario_creador, vinculado_a,
         version, estado
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, 'pendiente_aprobacion')
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `;
 
     const values = [
-      codigo, nombre, descripcion, gestion_id, convencion,
-      archivo_fuente, archivo_pdf, usuario_creador
+      codigo,
+      nombre,
+      descripcion,
+      gestion_id,
+      convencion,
+      archivo_fuente,
+      archivo_pdf,
+      usuario_creador,
+      vinculado_a,
+      1, // version
+      'pendiente_aprobacion' // estado
     ];
 
-    const result = await query(sql, values);
     return result.rows[0];
   }
 
@@ -41,14 +50,14 @@ class Documento {
     const sql = `
       SELECT d.*, 
              g.nombre as gestion_nombre,
-             uc.name as creador_nombre,
-             ur.name as revisor_nombre,
-             ua.name as aprobador_nombre
+             uc.nombre as creador_nombre,
+             ur.nombre as revisor_nombre,
+             ua.nombre as aprobador_nombre
       FROM documentos d
       LEFT JOIN gestiones g ON d.gestion_id = g.id
-      LEFT JOIN users uc ON d.usuario_creador = uc.id
-      LEFT JOIN users ur ON d.usuario_revisor = ur.id
-      LEFT JOIN users ua ON d.usuario_aprobador = ua.id
+      LEFT JOIN usuarios uc ON d.usuario_creador = uc.id
+      LEFT JOIN usuarios ur ON d.usuario_revisor = ur.id
+      LEFT JOIN usuarios ua ON d.usuario_aprobador = ua.id
       WHERE d.id = $1
     `;
 
@@ -63,15 +72,15 @@ class Documento {
     let sql = `
       SELECT d.*, 
              g.nombre as gestion_nombre,
-             uc.name   as creador_nombre,
-             ur.name as revisor_nombre,
-             ua.name as aprobador_nombre
+             uc.nombre as creador_nombre,
+             ur.nombre as revisor_nombre,
+             ua.nombre as aprobador_nombre
       FROM documentos d
       LEFT JOIN gestiones g ON d.gestion_id = g.id
-      LEFT JOIN users uc ON d.usuario_creador = uc.id
-      LEFT JOIN users ur ON d.usuario_revisor = ur.id
-      LEFT JOIN users ua ON d.usuario_aprobador = ua.id
-      WHERE 1=1
+      LEFT JOIN usuarios uc ON d.usuario_creador = uc.id
+      LEFT JOIN usuarios ur ON d.usuario_revisor = ur.id
+      LEFT JOIN usuarios ua ON d.usuario_aprobador = ua.id
+      WHERE d.estado != 'eliminado'
     `;
 
     const values = [];
@@ -133,17 +142,21 @@ class Documento {
    */
   static async update(id, updateData, usuario_id) {
     const client = await getClient();
-    
+
     try {
       await client.query('BEGIN');
 
       // Obtener documento actual
-      const currentDoc = await client.query('SELECT * FROM documentos WHERE id = $1', [id]);
+      const currentDoc = await client.query(
+        'SELECT * FROM documentos WHERE id = $1',
+        [id]
+      );
       if (currentDoc.rows.length === 0) {
         throw new Error('Documento no encontrado');
       }
 
       const current = currentDoc.rows[0];
+      console.log('Current document:', current);
 
       // Guardar en histórico
       const historicoSql = `
@@ -154,15 +167,24 @@ class Documento {
       `;
 
       await client.query(historicoSql, [
-        current.id, current.version, current.archivo_fuente, current.archivo_pdf,
-        current.estado, usuario_id
+        current.id,
+        current.version,
+        current.archivo_fuente,
+        current.archivo_pdf,
+        current.estado,
+        usuario_id
       ]);
 
-      // Actualizar documento principal
+      // Only update basic document fields (no signing fields)
       const {
-        nombre, descripcion, gestion_id, convencion,
-        archivo_fuente, archivo_pdf, estado,
-        is_signed, signed_file_path, signer_name, signed_at, usuario_firmante
+        nombre,
+        descripcion,
+        gestion_id,
+        convencion,
+        archivo_fuente,
+        archivo_pdf,
+        estado,
+        vinculado_a
       } = updateData;
 
       const updateSql = `
@@ -174,27 +196,26 @@ class Documento {
           archivo_fuente = COALESCE($5, archivo_fuente),
           archivo_pdf = COALESCE($6, archivo_pdf),
           estado = COALESCE($7, estado),
-          is_signed = COALESCE($8, is_signed),
-          signed_file_path = COALESCE($9, signed_file_path),
-          signer_name = COALESCE($10, signer_name),
-          signed_at = COALESCE($11, signed_at),
-          usuario_firmante = COALESCE($12, usuario_firmante),
-          version = version + 1,
+          vinculado_a = COALESCE($8, vinculado_a),
           fecha_actualizacion = CURRENT_TIMESTAMP
-        WHERE id = $13
+        WHERE id = $9
         RETURNING *
       `;
 
       const result = await client.query(updateSql, [
-        nombre, descripcion, gestion_id, convencion,
-        archivo_fuente, archivo_pdf, estado,
-        is_signed, signed_file_path, signer_name, signed_at, usuario_firmante,
+        nombre,
+        descripcion,
+        gestion_id,
+        convencion,
+        archivo_fuente,
+        archivo_pdf,
+        estado,
+        vinculado_a,
         id
       ]);
 
       await client.query('COMMIT');
       return result.rows[0];
-
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -204,10 +225,13 @@ class Documento {
   }
 
   /**
-   * Eliminar documento
+   * Eliminar documento (soft delete)
    */
   static async delete(id) {
-    const result = await query('DELETE FROM documentos WHERE id = $1 RETURNING *', [id]);
+    const result = await query(
+      'UPDATE documentos SET estado = $1, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      ['eliminado', id]
+    );
     return result.rows[0];
   }
 
@@ -219,7 +243,7 @@ class Documento {
       SELECT h.*, 
              u.nombre as modificado_por
       FROM historico_documentos h
-      LEFT JOIN users u ON h.usuario_id = u.id
+      LEFT JOIN usuarios u ON h.usuario_id = u.id
       WHERE h.documento_id = $1
       ORDER BY h.fecha DESC
     `;
@@ -242,13 +266,15 @@ class Documento {
     `;
 
     const result = await query(sql, [usuario_revisor, id]);
-    
+
     if (result.rows.length === 0) {
-      throw new Error('Documento no encontrado o no está en estado pendiente de revisión');
+      throw new Error(
+        'Documento no encontrado o no está en estado pendiente de revisión'
+      );
     }
 
     // TODO: Aquí se podría agregar lógica para guardar comentarios en una tabla separada
-    
+
     return result.rows[0];
   }
 
@@ -266,9 +292,11 @@ class Documento {
     `;
 
     const result = await query(sql, [usuario_aprobador, id]);
-    
+
     if (result.rows.length === 0) {
-      throw new Error('Documento no encontrado o no está en estado pendiente de aprobación');
+      throw new Error(
+        'Documento no encontrado o no está en estado pendiente de aprobación'
+      );
     }
 
     return result.rows[0];
@@ -287,13 +315,13 @@ class Documento {
     `;
 
     const result = await query(sql, [id]);
-    
+
     if (result.rows.length === 0) {
       throw new Error('Documento no encontrado');
     }
 
     // TODO: Aquí se podría agregar lógica para guardar comentarios de rechazo
-    
+
     return result.rows[0];
   }
 
@@ -304,10 +332,10 @@ class Documento {
     const sql = `
       SELECT d.*, 
              g.nombre as gestion_nombre,
-             uc.name as creador_nombre
+             uc.nombre as creador_nombre
       FROM documentos d
       LEFT JOIN gestiones g ON d.gestion_id = g.id
-      LEFT JOIN users uc ON d.usuario_creador = uc.id
+      LEFT JOIN usuarios uc ON d.usuario_creador = uc.id
       WHERE d.estado = 'pendiente_revision'
       ORDER BY d.fecha_creacion ASC
     `;
@@ -323,12 +351,12 @@ class Documento {
     const sql = `
       SELECT d.*, 
              g.nombre as gestion_nombre,
-             uc.name as creador_nombre,
-             ur.name as revisor_nombre
+             uc.nombre as creador_nombre,
+             ur.nombre as revisor_nombre
       FROM documentos d
       LEFT JOIN gestiones g ON d.gestion_id = g.id
-      LEFT JOIN users uc ON d.usuario_creador = uc.id
-      LEFT JOIN users ur ON d.usuario_revisor = ur.id
+      LEFT JOIN usuarios uc ON d.usuario_creador = uc.id
+      LEFT JOIN usuarios ur ON d.usuario_revisor = ur.id
       WHERE d.estado = 'pendiente_aprobacion'
       ORDER BY d.fecha_creacion ASC
     `;
