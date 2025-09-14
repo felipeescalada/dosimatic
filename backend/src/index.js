@@ -3,7 +3,14 @@ const cors = require('cors');
 const path = require('path');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-require('dotenv').config();
+// Load environment configuration
+if (process.env.npm_config_local || process.argv.includes('--local')) {
+  require('dotenv').config({ path: '.env.local', override: true });
+  console.log('🔧 Using local environment (.env.local)');
+} else {
+  require('dotenv').config();
+  console.log('🔧 Using production environment (.env)');
+}
 
 const { testConnection } = require('./config/database');
 const documentosRoutes = require('./routes/documentos');
@@ -15,10 +22,10 @@ const app = express();
 
 // Configuración de CORS
 const allowedOrigins = [
-  'http://localhost:3000',  // Flutter web default port
-  'http://localhost:3001',  // Common development port
-  'http://localhost:3500',  // Your API port
-  'http://127.0.0.1:3000',  // Alternative localhost
+  'http://localhost:3000', // Flutter web default port
+  'http://localhost:3001', // Common development port
+  'http://localhost:3500', // Your API port
+  'http://127.0.0.1:3000', // Alternative localhost
   'http://127.0.0.1:3001',
   'http://127.0.0.1:3500'
 ];
@@ -27,9 +34,11 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin) || 
-        process.env.NODE_ENV !== 'production') {
+
+    if (
+      allowedOrigins.includes(origin) ||
+      process.env.NODE_ENV !== 'production'
+    ) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -80,17 +89,21 @@ const swaggerOptions = {
       }
     }
   },
-  apis: ['./src/routes/*.js'], // Rutas donde están las definiciones de Swagger
+  apis: ['./src/routes/*.js'] // Rutas donde están las definiciones de Swagger
 };
 
 const specs = swaggerJsdoc(swaggerOptions);
 
 // Ruta de documentación Swagger
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
-  explorer: true,
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'Sistema Documental API'
-}));
+app.use(
+  '/api-docs',
+  swaggerUi.serve,
+  swaggerUi.setup(specs, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Sistema Documental API'
+  })
+);
 
 // Ruta de salud del servidor
 app.get('/health', (req, res) => {
@@ -107,7 +120,8 @@ app.get('/api', (req, res) => {
   res.json({
     name: 'Sistema de Gestión Documental API',
     version: '1.0.0',
-    description: 'API REST para gestión de documentos con control de versiones y flujo de aprobación',
+    description:
+      'API REST para gestión de documentos con control de versiones y flujo de aprobación',
     endpoints: {
       documentos: '/api/documentos',
       users: '/api/users',
@@ -144,8 +158,8 @@ app.use('*', (req, res) => {
 
 // Middleware global de manejo de errores
 app.use((error, req, res, next) => {
-  console.error('Error no manejado:', error);
-  
+  console.error('❌ Error no manejado:', error.message);
+
   // Error de validación de Joi
   if (error.isJoi) {
     return res.status(400).json({
@@ -209,23 +223,18 @@ const initializeServer = async () => {
     directories.forEach(dir => {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
-        console.log('📁 Directorio creado:', dir);
+        console.log(`📁 Directorio creado: ${path.basename(dir)}`);
       }
     });
 
     const PORT = process.env.PORT || 3500;
-    
+
     app.listen(PORT, '0.0.0.0', () => {
       console.log('🚀 Servidor iniciado exitosamente');
-      console.log(`📡 Puerto: ${PORT}`);
-      console.log(`🌐 URL: http://localhost:${PORT}`);
-      console.log(`📚 Documentación: http://localhost:${PORT}/api-docs`);
-      console.log(`💚 Health Check: http://localhost:${PORT}/health`);
-      console.log(`📋 API Info: http://localhost:${PORT}/api`);
-      console.log(`🐳 Docker: ${process.env.NODE_ENV === 'production' ? 'Enabled' : 'Disabled'}`);
+      console.log(`📡 Puerto: ${PORT} | 🌐 URL: http://localhost:${PORT}`);
+      console.log(`📚 Docs: /api-docs | 💚 Health: /health | 📋 Info: /api`);
       console.log('─'.repeat(50));
     });
-
   } catch (error) {
     console.error('❌ Error al inicializar el servidor:', error.message);
     process.exit(1);
@@ -234,12 +243,12 @@ const initializeServer = async () => {
 
 // Manejo de cierre graceful
 process.on('SIGTERM', () => {
-  console.log('🛑 Recibida señal SIGTERM, cerrando servidor...');
+  console.log('🛑 Cerrando servidor (SIGTERM)...');
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  console.log('🛑 Recibida señal SIGINT, cerrando servidor...');
+  console.log('🛑 Cerrando servidor (SIGINT)...');
   process.exit(0);
 });
 
