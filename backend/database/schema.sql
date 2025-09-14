@@ -156,27 +156,12 @@ SELECT * FROM (VALUES
 ) AS v(nombre, descripcion)
 WHERE NOT EXISTS (SELECT 1 FROM gestiones WHERE nombre = v.nombre);
 
--- Insertar datos de ejemplo para gestiones
-INSERT INTO gestiones (nombre, descripcion) VALUES 
-('Recursos Humanos', 'Gestión de personal y nóminas'),
-('Calidad', 'Control de calidad y procesos'),
-('Sistemas', 'Tecnología y sistemas de información')
-ON CONFLICT DO NOTHING;
-
--- Crear usuario administrador por defecto
--- Contraseña: admin123 (hasheada con bcrypt)
+-- Crear usuarios por defecto con contraseñas hasheadas (bcrypt)
+-- Contraseña para todos: admin123
 INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES 
-
-ON CONFLICT (email) DO NOTHING;
-
--- Insertar usuarios de ejemplo solo si no existen
--- (Verificar primero si ya tienes usuarios en tu tabla existente)
-INSERT INTO usuarios (nombre, email, rol) 
-SELECT * FROM (VALUES 
-    ('Administrador Sistema', 'admin.docs@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', true),
+('Administrador Sistema', 'admin.docs@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', true),
 ('Gerente General', 'gerente@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'gerente', true),
-('Juan Pérez', 'juan.perez@empresa.com', 'creador'),
-('María García', 'maria.garcia@empresa.com', 'revisor'),
-('Carlos López', 'carlos.lopez@empresa.com', 'aprobador'),
-) AS v(nombre, email, rol)
-WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE email = v.email);
+('Juan Pérez', 'juan.perez@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'creador', true),
+('María García', 'maria.garcia@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'revisor', true),
+('Carlos López', 'carlos.lopez@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'aprobador', true)
+ON CONFLICT (email) DO NOTHING;
