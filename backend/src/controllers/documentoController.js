@@ -19,7 +19,9 @@ const createDocumentoSchema = Joi.object({
     )
     .required(),
   usuario_creador: Joi.number().integer().positive().required(),
-  archivo_fuente: Joi.string().optional().max(255)
+  vinculado_a: Joi.number().integer().positive().optional(),
+  archivo_fuente: Joi.string().optional().max(255),
+  archivo_pdf: Joi.string().optional().max(255)
 });
 
 // Esquema de validación para actualizar documento
@@ -44,6 +46,7 @@ const updateDocumentoSchema = Joi.object({
       'rechazado'
     )
     .optional(),
+  vinculado_a: Joi.number().integer().positive().optional(),
   usuario_revisor: Joi.number().integer().positive().optional(),
   usuario_aprobador: Joi.number().integer().positive().optional(),
   comentarios_revision: Joi.string().optional(),
@@ -60,6 +63,9 @@ class DocumentoController {
       }
       if (req.body.usuario_creador && req.body.usuario_creador !== '') {
         req.body.usuario_creador = parseInt(req.body.usuario_creador);
+      }
+      if (req.body.vinculado_a && req.body.vinculado_a !== '') {
+        req.body.vinculado_a = parseInt(req.body.vinculado_a);
       }
 
       // Validar datos de entrada
