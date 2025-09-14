@@ -40,6 +40,7 @@ class Documento {
       'pendiente_aprobacion' // estado
     ];
 
+    const result = await query(sql, values);
     return result.rows[0];
   }
 
