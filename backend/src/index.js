@@ -17,6 +17,7 @@ const documentosRoutes = require('./routes/documentos');
 const usersRoutes = require('./routes/users');
 const authRoutes = require('./routes/auth.routes');
 const contactRoutes = require('./routes/contact.routes');
+const gestionesRoutes = require('./routes/gestiones');
 
 const app = express();
 
@@ -138,6 +139,7 @@ app.use('/api/documentos', documentosRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/contacts', contactRoutes);
+app.use('/api/gestiones', gestionesRoutes);
 
 // Middleware de manejo de errores 404
 app.use('*', (req, res) => {
