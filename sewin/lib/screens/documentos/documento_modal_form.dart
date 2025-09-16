@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:sewin/models/documento_model.dart';
+import 'package:sewin/models/gestion_model.dart';
 import 'package:sewin/services/documento_service.dart';
+import 'package:sewin/services/gestion_service.dart';
 import 'package:sewin/services/global_error_service.dart';
 import 'package:sewin/services/auth_service.dart';
 import 'package:sewin/services/logger_service.dart';
@@ -57,11 +59,9 @@ class _DocumentoModalFormState extends State<DocumentoModalForm> {
     'Documento Externo'
   ];
 
-  // Gestiones disponibles (mock data - should come from API)
-  final List<Map<String, dynamic>> _gestiones = [
-    {'id': 1, 'nombre': 'Gestión de Calidad'},
-    {'id': 2, 'nombre': 'Gestión Administrativa'},
-  ];
+  // Gestiones disponibles (dynamic data from API)
+  List<Gestion> _gestiones = [];
+  bool _loadingGestiones = false;
 
   // Documentos disponibles para vincular
   List<Map<String, dynamic>> _documentosDisponibles = [];
@@ -70,9 +70,30 @@ class _DocumentoModalFormState extends State<DocumentoModalForm> {
   @override
   void initState() {
     super.initState();
+    _loadGestiones();
     _loadDocumentosDisponibles();
     if (widget.documento != null) {
       _loadDocumentoData();
+    }
+  }
+
+  Future<void> _loadGestiones() async {
+    setState(() {
+      _loadingGestiones = true;
+    });
+
+    try {
+      final gestiones = await GestionService.getGestiones();
+      setState(() {
+        _gestiones = gestiones;
+        _loadingGestiones = false;
+      });
+    } catch (e) {
+      Logger.e('Error loading gestiones',
+          error: e, stackTrace: StackTrace.current);
+      setState(() {
+        _loadingGestiones = false;
+      });
     }
   }
 
@@ -267,28 +288,34 @@ class _DocumentoModalFormState extends State<DocumentoModalForm> {
                     ),
                     child: DropdownButtonFormField<int>(
                       value:
-                          _gestiones.any((g) => g['id'] == _selectedGestionId)
+                          _gestiones.any((g) => g.id == _selectedGestionId)
                               ? _selectedGestionId
                               : null,
-                      items: _gestiones.map((gestion) {
-                        return DropdownMenuItem<int>(
-                          value: gestion['id'],
-                          child: Text(gestion['nombre']),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedGestionId = value;
-                          _selectedGestionNombre = _gestiones
-                              .firstWhere((g) => g['id'] == value)['nombre'];
-                        });
-                      },
+                      items: _loadingGestiones
+                          ? []
+                          : _gestiones.map((gestion) {
+                              return DropdownMenuItem<int>(
+                                value: gestion.id,
+                                child: Text(gestion.nombre),
+                              );
+                            }).toList(),
+                      onChanged: _loadingGestiones
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _selectedGestionId = value;
+                                _selectedGestionNombre = _gestiones
+                                    .firstWhere((g) => g.id == value).nombre;
+                              });
+                            },
                       decoration: const InputDecoration(
                         contentPadding:
                             EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                         border: InputBorder.none,
                       ),
-                      hint: const Text('Seleccionar Gestión'),
+                      hint: _loadingGestiones
+                          ? const Text('Cargando gestiones...')
+                          : const Text('Seleccionar Gestión'),
                       validator: (value) {
                         if (value == null) {
                           return 'Por favor seleccione una gestión';
