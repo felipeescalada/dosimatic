@@ -73,7 +73,12 @@ app.use(
   swaggerUi.setup(specs, {
     explorer: true,
     customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'Sistema Documental API'
+    customSiteTitle: 'Sistema Documental API',
+    swaggerOptions: {
+      tagsSorter: (a, b) => {
+        return a.localeCompare(b);
+      }
+    }
   })
 );
 
