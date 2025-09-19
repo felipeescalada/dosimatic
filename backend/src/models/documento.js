@@ -88,16 +88,34 @@ class Documento {
     let paramCount = 0;
 
     // Aplicar filtros
-    if (filters.codigo) {
-      paramCount++;
-      sql += ` AND d.codigo ILIKE $${paramCount}`;
-      values.push(`%${filters.codigo}%`);
-    }
+    if (filters.search) {
+      // Split search terms by spaces and filter out empty strings
+      const searchTerms = filters.search.split(/\s+/).filter(term => term.trim() !== '');
+      
+      if (searchTerms.length > 0) {
+        const conditions = [];
+        searchTerms.forEach((term, index) => {
+          const paramIndex = paramCount + index + 1;
+          conditions.push(`(d.codigo ILIKE $${paramIndex} OR d.nombre ILIKE $${paramIndex})`);
+          values.push(`%${term}%`);
+        });
+        
+        sql += ` AND (${conditions.join(' AND ')})`;
+        paramCount += searchTerms.length;
+      }
+    } else {
+      // Filtros individuales (mantener compatibilidad)
+      if (filters.codigo) {
+        paramCount++;
+        sql += ` AND d.codigo ILIKE $${paramCount}`;
+        values.push(`%${filters.codigo}%`);
+      }
 
-    if (filters.nombre) {
-      paramCount++;
-      sql += ` AND d.nombre ILIKE $${paramCount}`;
-      values.push(`%${filters.nombre}%`);
+      if (filters.nombre) {
+        paramCount++;
+        sql += ` AND d.nombre ILIKE $${paramCount}`;
+        values.push(`%${filters.nombre}%`);
+      }
     }
 
     if (filters.gestion_id) {
