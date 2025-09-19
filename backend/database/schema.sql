@@ -15,7 +15,8 @@ CREATE TYPE estado_doc AS ENUM (
     'pendiente_aprobacion', 
     'aprobado',
     'rechazado',
-    'eliminado'
+    'eliminado',
+    'borrador'
 );
 
 -- Tabla de gestiones
@@ -83,6 +84,8 @@ CREATE TABLE IF NOT EXISTS historico_documentos (
 
 -- Índices para mejorar rendimiento
 CREATE INDEX IF NOT EXISTS idx_documentos_codigo ON documentos(codigo);
+CREATE INDEX IF NOT EXISTS idx_documentos_nombre ON documentos(nombre);
+CREATE INDEX IF NOT EXISTS idx_documentos_codigo_nombre ON documentos(codigo, nombre);
 CREATE INDEX IF NOT EXISTS idx_documentos_gestion ON documentos(gestion_id);
 CREATE INDEX IF NOT EXISTS idx_documentos_estado ON documentos(estado);
 CREATE INDEX IF NOT EXISTS idx_documentos_convencion ON documentos(convencion);
