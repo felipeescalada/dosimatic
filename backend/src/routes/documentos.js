@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const DocumentoController = require('../controllers/documentoController');
-const { uploadDocumentFiles, handleMulterError } = require('../middleware/upload');
+const {
+  uploadDocumentFiles,
+  handleMulterError
+} = require('../middleware/upload');
 
 /**
  * @swagger
@@ -110,7 +113,12 @@ const { uploadDocumentFiles, handleMulterError } = require('../middleware/upload
  *       500:
  *         description: Error interno del servidor
  */
-router.post('/', uploadDocumentFiles, handleMulterError, DocumentoController.create);
+router.post(
+  '/',
+  uploadDocumentFiles,
+  handleMulterError,
+  DocumentoController.create
+);
 
 /**
  * @swagger
@@ -120,15 +128,20 @@ router.post('/', uploadDocumentFiles, handleMulterError, DocumentoController.cre
  *     tags: [Documentos]
  *     parameters:
  *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Filtrar por código y nombre simultáneamente
+ *       - in: query
  *         name: codigo
  *         schema:
  *           type: string
- *         description: Filtrar por código
+ *         description: Filtrar por código específico
  *       - in: query
  *         name: nombre
  *         schema:
  *           type: string
- *         description: Filtrar por nombre
+ *         description: Filtrar por nombre específico
  *       - in: query
  *         name: gestion_id
  *         schema:
@@ -253,7 +266,12 @@ router.get('/:id', DocumentoController.getById);
  *       500:
  *         description: Error interno del servidor
  */
-router.put('/:id', uploadDocumentFiles, handleMulterError, DocumentoController.update);
+router.put(
+  '/:id',
+  uploadDocumentFiles,
+  handleMulterError,
+  DocumentoController.update
+);
 
 /**
  * @swagger
@@ -443,7 +461,10 @@ router.get('/pendientes/revision', DocumentoController.getPendientesRevision);
  *       500:
  *         description: Error interno del servidor
  */
-router.get('/pendientes/aprobacion', DocumentoController.getPendientesAprobacion);
+router.get(
+  '/pendientes/aprobacion',
+  DocumentoController.getPendientesAprobacion
+);
 
 /**
  * @swagger
