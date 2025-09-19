@@ -202,60 +202,14 @@ class _DocumentosPageState extends State<DocumentosPage> {
   }
 
   int _getDocumentCount() {
-    final (documents, _) = _getDocumentsForView();
-    return documents.length;
-  }
-
-  // Build menu item widget
-  Widget _buildMenuItem({
-    required String view,
-    required String title,
-    required Color color,
-    required int count,
-  }) {
-    final isSelected = _selectedView == view;
-    return InkWell(
-      onTap: () {
-        setState(() => _selectedView = view);
-        _fetchFilteredDocuments(view);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  '$count',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    switch (_selectedView) {
+      case 'aprobar':
+        return _pendientesPorAprobar.length;
+      case 'revisar':
+        return _pendientesPorRevisar.length;
+      default:
+        return _filteredDocumentos.length;
+    }
   }
 
   @override
@@ -324,19 +278,100 @@ class _DocumentosPageState extends State<DocumentosPage> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Menu Items
-                      _buildMenuItem(
-                        view: 'aprobar',
-                        title: 'Pendientes por Aprobar',
-                        color: Colors.orange,
-                        count: _pendientesAprobacionCount,
+                      // Pendientes por Aprobar
+                      InkWell(
+                        onTap: () {
+                          setState(() => _selectedView = 'aprobar');
+                          _fetchFilteredDocuments('aprobar');
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 8, horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: _selectedView == 'aprobar'
+                                ? Colors.orange[50]
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: const BoxDecoration(
+                                  color: Colors.orange,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '$_pendientesAprobacionCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Pendientes por Aprobar',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
+
                       const SizedBox(height: 8),
-                      _buildMenuItem(
-                        view: 'revisar',
-                        title: 'Pendientes por Revisar',
-                        color: Colors.red,
-                        count: _pendientesRevisionCount,
+
+                      // Pendientes por Revisar
+                      InkWell(
+                        onTap: () {
+                          setState(() => _selectedView = 'revisar');
+                          _fetchFilteredDocuments('revisar');
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 8, horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: _selectedView == 'revisar'
+                                ? Colors.red[50]
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '$_pendientesRevisionCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Pendientes por Revisar',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -357,24 +392,28 @@ class _DocumentosPageState extends State<DocumentosPage> {
     );
   }
 
-  /// Returns the appropriate document list and title based on the current view
-  (List<Documento> documents, String title) _getDocumentsForView() {
-    return switch (_selectedView) {
-      'aprobar' => (_pendientesPorAprobar, 'Pendientes por Aprobar'),
-      'revisar' => (_pendientesPorRevisar, 'Pendientes por Revisar'),
-      _ => (
-          _filteredDocumentos,
-          _searchQuery.isNotEmpty ? 'Resultados de búsqueda' : 'Documentos'
-        ),
-    };
-  }
-
   Widget _buildRightContent() {
     if (_errorMessage != null) {
       return Center(child: Text(_errorMessage!));
     }
 
-    final (documentsToShow, title) = _getDocumentsForView();
+    List<Documento> documentsToShow;
+    String title;
+
+    switch (_selectedView) {
+      case 'aprobar':
+        documentsToShow = _pendientesPorAprobar;
+        title = 'Pendientes por Aprobar';
+        break;
+      case 'revisar':
+        documentsToShow = _pendientesPorRevisar;
+        title = 'Pendientes por Revisar';
+        break;
+      default:
+        documentsToShow = _filteredDocumentos;
+        title =
+            _searchQuery.isNotEmpty ? 'Resultados de búsqueda' : 'Documentos';
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
