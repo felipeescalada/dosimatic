@@ -89,18 +89,20 @@ class Documento {
 
     // Aplicar filtros
     if (filters.search) {
-      // Split search terms by spaces and filter out empty strings
-      const searchTerms = filters.search.split(/\s+/).filter(term => term.trim() !== '');
+      // Convert search to lowercase once and split into terms
+      const searchTerm = filters.search.toLowerCase();
+      const searchTerms = searchTerm.split(/\s+/).filter(term => term.trim() !== '');
       
       if (searchTerms.length > 0) {
-        const conditions = [];
-        searchTerms.forEach((term, index) => {
+        const conditions = searchTerms.map((term, index) => {
           const paramIndex = paramCount + index + 1;
-          conditions.push(`(d.codigo ILIKE $${paramIndex} OR d.nombre ILIKE $${paramIndex})`);
-          values.push(`%${term}%`);
+          // Use LOWER() function for case-insensitive search with index
+          return `(LOWER(d.codigo) LIKE $${paramIndex} OR LOWER(d.nombre) LIKE $${paramIndex})`;
         });
         
         sql += ` AND (${conditions.join(' AND ')})`;
+        // Add terms with % wildcards for LIKE
+        searchTerms.forEach(term => values.push(`%${term}%`));
         paramCount += searchTerms.length;
       }
     } else {
