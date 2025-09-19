@@ -134,6 +134,7 @@ class DocumentoController {
       const filters = {
         codigo: req.query.codigo,
         nombre: req.query.nombre,
+        search: req.query.search, // Nuevo parámetro para búsqueda combinada
         gestion_id: req.query.gestion_id
           ? parseInt(req.query.gestion_id)
           : undefined,
