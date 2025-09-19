@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:sewin/models/documento_model.dart';
 import 'package:sewin/services/documento_service.dart';
 import 'package:sewin/services/global_error_service.dart';
+import 'package:sewin/services/auth_service.dart';
 import 'package:sewin/screens/documentos/documento_modal_form.dart';
 import 'package:sewin/widgets/app_drawer.dart';
 
@@ -15,6 +17,7 @@ class DocumentosPage extends StatefulWidget {
 class _DocumentosPageState extends State<DocumentosPage> {
   // Lista para almacenar los documentos
   List<Documento> _documentos = [];
+  List<Documento> _filteredDocumentos = [];
   List<Documento> _pendientesPorAprobar = [];
   List<Documento> _pendientesPorRevisar = [];
   int _pendientesRevisionCount = 0;
@@ -23,48 +26,67 @@ class _DocumentosPageState extends State<DocumentosPage> {
   String? _errorMessage;
   String _selectedView = 'resumen'; // 'resumen', 'aprobar', 'revisar'
 
+  // Search functionality
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
     _fetchDocuments();
   }
 
-  // Función para obtener los documentos del backend
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Fetches documents from the backend and updates the UI
+  /// Also fetches pending counts for the sidebar
   Future<void> _fetchDocuments() async {
     setState(() {
-      _isLoading = true;
       _errorMessage = null;
     });
 
     try {
       // Fetch all documents and pending counts in parallel
       final results = await Future.wait([
-        DocumentoService.getDocumentos(limit: 50),
+        DocumentoService.getDocumentos(limit: 20),
         DocumentoService.getPendientesRevisionCount(),
         DocumentoService.getPendientesAprobacionCount(),
       ]);
 
       final documentResult = results[0] as Map<String, dynamic>;
       final documentos = documentResult['documentos'] as List<Documento>;
-      final revisionCount = results[1] as int;
-      final aprobacionCount = results[2] as int;
 
       setState(() {
         _documentos = documentos;
-        _pendientesRevisionCount = revisionCount;
-        _pendientesAprobacionCount = aprobacionCount;
-        // Keep local filtering as fallback
+        _filteredDocumentos = _searchQuery.isEmpty
+            ? documentos
+            : documentos
+                .where((doc) =>
+                    doc.codigo
+                        .toLowerCase()
+                        .contains(_searchQuery.toLowerCase()) ||
+                    doc.nombre
+                        .toLowerCase()
+                        .contains(_searchQuery.toLowerCase()))
+                .toList();
+
+        _pendientesRevisionCount = results[1] as int;
+        _pendientesAprobacionCount = results[2] as int;
+
+        // Update pending lists
         _pendientesPorAprobar =
             documentos.where((doc) => doc.estado == 'en_revision').toList();
+
         _pendientesPorRevisar =
             documentos.where((doc) => doc.estado == 'borrador').toList();
-        _isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Error de conexión: $e';
-        _isLoading = false;
-      });
+      GlobalErrorService.showError('Error al cargar documentos: $e');
+      setState(() => _errorMessage = 'Error al cargar documentos');
     }
   }
 
@@ -145,6 +167,97 @@ class _DocumentosPageState extends State<DocumentosPage> {
     }
   }
 
+  /// Applies search filter and updates the document list
+  /// Only triggers search when explicitly called (via button press or Enter key)
+  Future<void> _applySearchFilter() async {
+    final query = _searchController.text.trim();
+    setState(() => _searchQuery = query);
+
+    try {
+      setState(() => _isLoading = true);
+
+      if (query.isEmpty) {
+        // If search is empty, fetch fresh documents
+        await _fetchDocuments();
+      } else {
+        // Use backend search with the query
+        final result = await DocumentoService.getDocumentos(
+          limit: 50,
+          search: query,
+        );
+
+        setState(() {
+          _filteredDocumentos = result['documentos'] as List<Documento>;
+        });
+      }
+    } catch (e) {
+      GlobalErrorService.showError('Error al buscar documentos: $e');
+      // Reset to show all documents on error
+      setState(() => _filteredDocumentos = _documentos);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  int _getDocumentCount() {
+    final (documents, _) = _getDocumentsForView();
+    return documents.length;
+  }
+
+  // Build menu item widget
+  Widget _buildMenuItem({
+    required String view,
+    required String title,
+    required Color color,
+    required int count,
+  }) {
+    final isSelected = _selectedView == view;
+    return InkWell(
+      onTap: () {
+        setState(() => _selectedView = view);
+        _fetchFilteredDocuments(view);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -211,100 +324,19 @@ class _DocumentosPageState extends State<DocumentosPage> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Pendientes por Aprobar
-                      InkWell(
-                        onTap: () {
-                          setState(() => _selectedView = 'aprobar');
-                          _fetchFilteredDocuments('aprobar');
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 8, horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: _selectedView == 'aprobar'
-                                ? Colors.orange[50]
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 20,
-                                height: 20,
-                                decoration: const BoxDecoration(
-                                  color: Colors.orange,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '$_pendientesAprobacionCount',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              const Expanded(
-                                child: Text(
-                                  'Pendientes por Aprobar',
-                                  style: TextStyle(fontSize: 14),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      // Menu Items
+                      _buildMenuItem(
+                        view: 'aprobar',
+                        title: 'Pendientes por Aprobar',
+                        color: Colors.orange,
+                        count: _pendientesAprobacionCount,
                       ),
-
                       const SizedBox(height: 8),
-
-                      // Pendientes por Revisar
-                      InkWell(
-                        onTap: () {
-                          setState(() => _selectedView = 'revisar');
-                          _fetchFilteredDocuments('revisar');
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 8, horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: _selectedView == 'revisar'
-                                ? Colors.red[50]
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 20,
-                                height: 20,
-                                decoration: const BoxDecoration(
-                                  color: Colors.red,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '$_pendientesRevisionCount',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              const Expanded(
-                                child: Text(
-                                  'Pendientes por Revisar',
-                                  style: TextStyle(fontSize: 14),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      _buildMenuItem(
+                        view: 'revisar',
+                        title: 'Pendientes por Revisar',
+                        color: Colors.red,
+                        count: _pendientesRevisionCount,
                       ),
                     ],
                   ),
@@ -325,37 +357,30 @@ class _DocumentosPageState extends State<DocumentosPage> {
     );
   }
 
-  Widget _buildRightContent() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+  /// Returns the appropriate document list and title based on the current view
+  (List<Documento> documents, String title) _getDocumentsForView() {
+    return switch (_selectedView) {
+      'aprobar' => (_pendientesPorAprobar, 'Pendientes por Aprobar'),
+      'revisar' => (_pendientesPorRevisar, 'Pendientes por Revisar'),
+      _ => (
+          _filteredDocumentos,
+          _searchQuery.isNotEmpty ? 'Resultados de búsqueda' : 'Documentos'
+        ),
+    };
+  }
 
+  Widget _buildRightContent() {
     if (_errorMessage != null) {
       return Center(child: Text(_errorMessage!));
     }
 
-    List<Documento> documentsToShow;
-    String title;
-
-    switch (_selectedView) {
-      case 'aprobar':
-        documentsToShow = _pendientesPorAprobar;
-        title = 'Pendientes por Aprobar';
-        break;
-      case 'revisar':
-        documentsToShow = _pendientesPorRevisar;
-        title = 'Pendientes por Revisar';
-        break;
-      default:
-        documentsToShow = _documentos;
-        title = 'Documentos (${_documentos.length})';
-    }
+    final (documentsToShow, title) = _getDocumentsForView();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Header with title and document count
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               title,
@@ -364,9 +389,83 @@ class _DocumentosPageState extends State<DocumentosPage> {
                 fontWeight: FontWeight.bold,
               ),
             ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '(${_getDocumentCount()})',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+            const Spacer(),
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh, color: Colors.teal),
               onPressed: _fetchDocuments,
+              tooltip: 'Actualizar documentos',
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // Search bar
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onSubmitted: (_) => _applySearchFilter(),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por código o nombre...',
+                    hintStyle: TextStyle(color: Colors.grey[500]),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: InputBorder.none,
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear,
+                                color: Colors.grey[400], size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _searchQuery = '';
+                                _filteredDocumentos = _documentos;
+                              });
+                            },
+                          )
+                        : null,
+                    isDense: true,
+                  ),
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              onPressed: _applySearchFilter,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              child: const Text('Consultar'),
             ),
           ],
         ),
@@ -385,6 +484,7 @@ class _DocumentosPageState extends State<DocumentosPage> {
                   DataColumn(label: Text('Convención')),
                   DataColumn(label: Text('Gestión')),
                   DataColumn(label: Text('Fecha')),
+                  DataColumn(label: Text('Eventos')),
                   DataColumn(label: Text('Acciones')),
                 ],
                 source: DocumentosDataSource(
@@ -428,6 +528,7 @@ class DocumentosDataSource extends DataTableSource {
   final Function _refreshCallback;
   final Function _onEdit;
   final Function _onDelete;
+  final AuthService _authService = AuthService();
 
   DocumentosDataSource(
     this._documentos,
@@ -453,18 +554,61 @@ class DocumentosDataSource extends DataTableSource {
         DataCell(Text(doc.convencion)),
         DataCell(Text(doc.gestionNombre)),
         DataCell(Text(doc.fechaCreacion.toString().split(' ')[0])),
-        DataCell(Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.blue),
-              onPressed: () => _onEdit(_context, documento: doc),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _onDelete(doc.id),
-            ),
-          ],
-        )),
+        DataCell(
+          FutureBuilder<Map<String, dynamic>?>(
+            future: _authService.getCurrentUser(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                );
+              }
+
+              final user = snapshot.data!;
+              final userRole = user['rol'] ?? 'user';
+              final userId = user['id'];
+
+              final menuItems = _buildMenuItems(doc, userRole, userId);
+
+              // Only show menu if there are items available
+              if (menuItems.isEmpty) {
+                return const SizedBox(width: 20, height: 20);
+              }
+
+              return PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, size: 20),
+                padding: EdgeInsets.zero,
+                tooltip: 'Firmar documento',
+                onSelected: (value) =>
+                    _handleMenuAction(value, doc, userRole, userId),
+                itemBuilder: (BuildContext context) => menuItems,
+              );
+            },
+          ),
+        ),
+        DataCell(
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                onPressed: () => _onEdit(_context, documento: doc),
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(),
+                tooltip: 'Editar documento',
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                onPressed: () => _onDelete(doc.id),
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(),
+                tooltip: 'Eliminar documento',
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -477,4 +621,35 @@ class DocumentosDataSource extends DataTableSource {
 
   @override
   int get selectedRowCount => 0;
+
+  // Build menu items based on user role and document state
+  List<PopupMenuEntry<String>> _buildMenuItems(
+      Documento doc, String userRole, int userId) {
+    List<PopupMenuEntry<String>> items = [];
+
+    items.add(
+      const PopupMenuItem<String>(
+        value: 'firmar',
+        child: Row(
+          children: [
+            Icon(Icons.edit_note, size: 18, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Firmar'),
+          ],
+        ),
+      ),
+    );
+
+    return items;
+  }
+
+  // Handle menu action selection
+  void _handleMenuAction(
+      String action, Documento doc, String userRole, int userId) {
+    switch (action) {
+      case 'firmar':
+        // TODO: Implement firmar functionality
+        break;
+    }
+  }
 }
