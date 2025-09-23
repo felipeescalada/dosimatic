@@ -752,212 +752,172 @@ class _DocumentosPageState extends State<DocumentosPage> {
             child: SingleChildScrollView(
               child: PaginatedDataTable(
                 columns: [
+                  const DataColumn(
+                    label: Text('ID'),
+                  ),
                   DataColumn(
-                    label: GestureDetector(
-                      onTap: () => _showColumnLookup(
-                        context,
-                        'ID',
-                        (value) async {
-                          setState(() {
-                            // Clear other filters when applying a new one
-                            _filterCodigo = null;
-                            _filterNombre = null;
-                            _filterEstado = null;
-                            _filterConvencion = null;
-                            _filterGestion = null;
-
-                            // Set the ID filter (using codigo field for ID filtering)
-                            if (value != null) {
+                    label: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => _showColumnLookup(
+                          context,
+                          'Código',
+                          (value) async {
+                            setState(() {
+                              // Clear other filters when applying a new one
+                              _filterNombre = null;
+                              _filterEstado = null;
+                              _filterConvencion = null;
+                              _filterGestion = null;
                               _filterCodigo = value;
-                            }
-                          });
-
-                          // Fetch filtered data from database
-                          await _applySearchFilter();
-                        },
-                        _filterCodigo,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('ID'),
-                          if (_filterCodigo != null) ...[
-                            const SizedBox(width: 4),
-                            const Icon(Icons.filter_alt,
-                                size: 14, color: Colors.blue),
+                            });
+                            await _applySearchFilter();
+                          },
+                          _filterCodigo,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('Código'),
+                            if (_filterCodigo != null) ...[
+                              const SizedBox(width: 4),
+                              const Icon(Icons.filter_alt, size: 14, color: Colors.blue),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
                   DataColumn(
-                    label: GestureDetector(
-                      onTap: () => _showColumnLookup(
-                        context,
-                        'Código',
-                        (value) async {
-                          setState(() {
-                            // Clear other filters when applying a new one
-                            _filterNombre = null;
-                            _filterEstado = null;
-                            _filterConvencion = null;
-                            _filterGestion = null;
-
-                            _filterCodigo = value;
-                          });
-
-                          // Fetch filtered data from database
-                          await _applySearchFilter();
-                        },
-                        _filterCodigo,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Código'),
-                          if (_filterCodigo != null) ...[
-                            const SizedBox(width: 4),
-                            const Icon(Icons.filter_alt,
-                                size: 14, color: Colors.blue),
+                    label: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => _showColumnLookup(
+                          context,
+                          'Nombre',
+                          (value) async {
+                            setState(() {
+                              // Clear other filters when applying a new one
+                              _filterCodigo = null;
+                              _filterEstado = null;
+                              _filterConvencion = null;
+                              _filterGestion = null;
+                              _filterNombre = value;
+                            });
+                            await _applySearchFilter();
+                          },
+                          _filterNombre,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('Nombre'),
+                            if (_filterNombre != null) ...[
+                              const SizedBox(width: 4),
+                              const Icon(Icons.filter_alt, size: 14, color: Colors.blue),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
                   DataColumn(
-                    label: GestureDetector(
-                      onTap: () => _showColumnLookup(
-                        context,
-                        'Nombre',
-                        (value) async {
-                          setState(() {
-                            // Clear other filters when applying a new one
-                            _filterCodigo = null;
-                            _filterEstado = null;
-                            _filterConvencion = null;
-                            _filterGestion = null;
-
-                            _filterNombre = value;
-                          });
-
-                          // Fetch filtered data from database
-                          await _applySearchFilter();
-                        },
-                        _filterNombre,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Nombre'),
-                          if (_filterNombre != null) ...[
-                            const SizedBox(width: 4),
-                            const Icon(Icons.filter_alt,
-                                size: 14, color: Colors.blue),
+                    label: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => _showColumnLookup(
+                          context,
+                          'Estado',
+                          (value) async {
+                            setState(() {
+                              // Clear other filters when applying a new one
+                              _filterCodigo = null;
+                              _filterNombre = null;
+                              _filterConvencion = null;
+                              _filterGestion = null;
+                              _filterEstado = value;
+                            });
+                            await _applySearchFilter();
+                          },
+                          _filterEstado,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('Estado'),
+                            if (_filterEstado != null) ...[
+                              const SizedBox(width: 4),
+                              const Icon(Icons.filter_alt, size: 14, color: Colors.blue),
+                            ],
                           ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: GestureDetector(
-                      onTap: () => _showColumnLookup(
-                        context,
-                        'Estado',
-                        (value) async {
-                          setState(() {
-                            // Clear other filters when applying a new one
-                            _filterCodigo = null;
-                            _filterNombre = null;
-                            _filterConvencion = null;
-                            _filterGestion = null;
-
-                            _filterEstado = value;
-                          });
-
-                          // Fetch filtered data from database
-                          await _applySearchFilter();
-                        },
-                        _filterEstado,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Estado'),
-                          if (_filterEstado != null) ...[
-                            const SizedBox(width: 4),
-                            const Icon(Icons.filter_alt,
-                                size: 14, color: Colors.blue),
-                          ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
                   const DataColumn(label: Text('Descripción')),
                   DataColumn(
-                    label: GestureDetector(
-                      onTap: () => _showColumnLookup(
-                        context,
-                        'Convención',
-                        (value) async {
-                          setState(() {
-                            // Clear other filters when applying a new one
-                            _filterCodigo = null;
-                            _filterNombre = null;
-                            _filterEstado = null;
-                            _filterGestion = null;
-
-                            _filterConvencion = value;
-                          });
-
-                          // Fetch filtered data from database
-                          await _applySearchFilter();
-                        },
-                        _filterConvencion,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Convención'),
-                          if (_filterConvencion != null) ...[
-                            const SizedBox(width: 4),
-                            const Icon(Icons.filter_alt,
-                                size: 14, color: Colors.blue),
+                    label: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => _showColumnLookup(
+                          context,
+                          'Convención',
+                          (value) async {
+                            setState(() {
+                              // Clear other filters when applying a new one
+                              _filterCodigo = null;
+                              _filterNombre = null;
+                              _filterEstado = null;
+                              _filterGestion = null;
+                              _filterConvencion = value;
+                            });
+                            await _applySearchFilter();
+                          },
+                          _filterConvencion,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('Convención'),
+                            if (_filterConvencion != null) ...[
+                              const SizedBox(width: 4),
+                              const Icon(Icons.filter_alt, size: 14, color: Colors.blue),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
                   DataColumn(
-                    label: GestureDetector(
-                      onTap: () => _showColumnLookup(
-                        context,
-                        'Gestión',
-                        (value) async {
-                          setState(() {
-                            // Clear other filters when applying a new one
-                            _filterCodigo = null;
-                            _filterNombre = null;
-                            _filterEstado = null;
-                            _filterConvencion = null;
-
-                            _filterGestion = value;
-                          });
-
-                          // Fetch filtered data from database
-                          await _applySearchFilter();
-                        },
-                        _filterGestion,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Gestión'),
-                          if (_filterGestion != null) ...[
-                            const SizedBox(width: 4),
-                            const Icon(Icons.filter_alt,
-                                size: 14, color: Colors.blue),
+                    label: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => _showColumnLookup(
+                          context,
+                          'Gestión',
+                          (value) async {
+                            setState(() {
+                              // Clear other filters when applying a new one
+                              _filterCodigo = null;
+                              _filterNombre = null;
+                              _filterEstado = null;
+                              _filterConvencion = null;
+                              _filterGestion = value;
+                            });
+                            await _applySearchFilter();
+                          },
+                          _filterGestion,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('Gestión'),
+                            if (_filterGestion != null) ...[
+                              const SizedBox(width: 4),
+                              const Icon(Icons.filter_alt, size: 14, color: Colors.blue),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
