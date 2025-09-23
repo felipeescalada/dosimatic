@@ -18,6 +18,7 @@ const usersRoutes = require('./routes/users');
 const authRoutes = require('./routes/auth.routes');
 const contactRoutes = require('./routes/contact.routes');
 const gestionesRoutes = require('./routes/gestiones');
+const lookupRoutes = require('./routes/lookup');
 
 const app = express();
 
@@ -95,6 +96,26 @@ const swaggerOptions = {
 
 const specs = swaggerJsdoc(swaggerOptions);
 
+// Extract all unique tags from paths and sort them alphabetically
+const allTags = new Set();
+
+// First pass: collect all unique tags
+Object.values(specs.paths || {}).forEach(pathItem => {
+  Object.values(pathItem).forEach(operation => {
+    if (operation.tags && Array.isArray(operation.tags)) {
+      operation.tags.forEach(tag => allTags.add(tag));
+    }
+  });
+});
+
+// Convert Set to array of tag objects, sorted alphabetically
+specs.tags = Array.from(allTags)
+  .sort((a, b) => a.localeCompare(b, 'en', {sensitivity: 'base'}))
+  .map(tag => ({
+    name: tag,
+    description: `${tag.charAt(0).toUpperCase() + tag.slice(1)} related endpoints`
+  }));
+
 // Ruta de documentación Swagger
 app.use(
   '/api-docs',
@@ -102,7 +123,14 @@ app.use(
   swaggerUi.setup(specs, {
     explorer: true,
     customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'Sistema Documental API'
+    customSiteTitle: 'Sistema Documental API',
+    swaggerOptions: {
+      docExpansion: 'list',
+      filter: true,
+      showRequestDuration: true,
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha'
+    }
   })
 );
 
@@ -128,6 +156,8 @@ app.get('/api', (req, res) => {
       users: '/api/users',
       auth: '/api/auth',
       contacts: '/api/contacts',
+      gestiones: '/api/gestiones',
+      lookup: '/api/documentos/lookup',
       swagger: '/api-docs',
       health: '/health'
     }
@@ -140,6 +170,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/gestiones', gestionesRoutes);
+app.use('/api', lookupRoutes);
 
 // Middleware de manejo de errores 404
 app.use('*', (req, res) => {
