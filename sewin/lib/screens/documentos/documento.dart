@@ -8,6 +8,7 @@ import 'package:sewin/screens/documentos/documento_modal_form.dart';
 import 'package:sewin/widgets/app_drawer.dart';
 import 'package:sewin/widgets/lookup.dart';
 import 'package:sewin/global/global_constantes.dart';
+import 'package:sewin/utils/document_utils.dart';
 
 class DocumentosPage extends StatefulWidget {
   const DocumentosPage({super.key});
@@ -1026,7 +1027,7 @@ class DocumentosDataSource extends DataTableSource {
         DataCell(Text(doc.id.toString())),
         DataCell(Text(doc.codigo)),
         DataCell(Text(doc.nombre)),
-        DataCell(Text(doc.estado)),
+        DataCell(Text(DocumentUtils.formatEstado(doc.estado))),
         DataCell(Text(doc.descripcion)),
         DataCell(Text(doc.convencion)),
         DataCell(Text(doc.gestionNombre)),
