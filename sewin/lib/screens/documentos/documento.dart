@@ -6,6 +6,8 @@ import 'package:sewin/services/global_error_service.dart';
 import 'package:sewin/services/auth_service.dart';
 import 'package:sewin/screens/documentos/documento_modal_form.dart';
 import 'package:sewin/widgets/app_drawer.dart';
+import 'package:sewin/widgets/lookup.dart';
+import 'package:sewin/global/global_constantes.dart';
 
 class DocumentosPage extends StatefulWidget {
   const DocumentosPage({super.key});
@@ -29,6 +31,13 @@ class _DocumentosPageState extends State<DocumentosPage> {
   // Search functionality
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  // Column filters
+  String? _filterCodigo;
+  String? _filterNombre;
+  String? _filterEstado;
+  String? _filterConvencion;
+  String? _filterGestion;
 
   @override
   void initState() {
@@ -62,17 +71,9 @@ class _DocumentosPageState extends State<DocumentosPage> {
 
       setState(() {
         _documentos = documentos;
-        _filteredDocumentos = _searchQuery.isEmpty
-            ? documentos
-            : documentos
-                .where((doc) =>
-                    doc.codigo
-                        .toLowerCase()
-                        .contains(_searchQuery.toLowerCase()) ||
-                    doc.nombre
-                        .toLowerCase()
-                        .contains(_searchQuery.toLowerCase()))
-                .toList();
+
+        // Apply filters and search
+        _filteredDocumentos = _applyFilters(documentos);
 
         _pendientesRevisionCount = results[1] as int;
         _pendientesAprobacionCount = results[2] as int;
@@ -153,51 +154,272 @@ class _DocumentosPageState extends State<DocumentosPage> {
 
     if (confirm) {
       try {
+        setState(() {
+          _isLoading = true;
+        });
+
         final success = await DocumentoService.deleteDocumento(id);
         if (success) {
-          // Si la eliminación fue exitosa, recarga los documentos
-          _fetchDocuments();
+          // Clear all filters and refresh the document list
+          await _clearAllFilters();
           GlobalErrorService.showSuccess('Documento eliminado con éxito.');
         } else {
+          setState(() {
+            _isLoading = false;
+          });
           GlobalErrorService.showError('Error al eliminar el documento.');
         }
       } catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
         GlobalErrorService.showError('Error de conexión: $e');
       }
     }
   }
 
+  /// Applies filters to the document list
+  List<Documento> _applyFilters(List<Documento> documents) {
+    List<Documento> filtered = documents;
+
+    // Apply search filter
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered
+          .where((doc) =>
+              doc.codigo.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              doc.nombre.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .toList();
+    }
+
+    // Apply column filters
+    if (_filterCodigo != null) {
+      filtered = filtered.where((doc) => doc.codigo == _filterCodigo).toList();
+    }
+    if (_filterNombre != null) {
+      filtered = filtered.where((doc) => doc.nombre == _filterNombre).toList();
+    }
+    if (_filterEstado != null) {
+      filtered = filtered.where((doc) => doc.estado == _filterEstado).toList();
+    }
+    if (_filterConvencion != null) {
+      filtered =
+          filtered.where((doc) => doc.convencion == _filterConvencion).toList();
+    }
+    if (_filterGestion != null) {
+      filtered =
+          filtered.where((doc) => doc.gestionNombre == _filterGestion).toList();
+    }
+
+    return filtered;
+  }
+
   /// Applies search filter and updates the document list
   /// Only triggers search when explicitly called (via button press or Enter key)
+  /// Now performs server-side database search for better results
   Future<void> _applySearchFilter() async {
     final query = _searchController.text.trim();
-    setState(() => _searchQuery = query);
+    setState(() {
+      _searchQuery = query;
+      _isLoading = true;
+    });
 
     try {
-      setState(() => _isLoading = true);
+      // Prepare search parameters for server-side filtering
+      String? searchTerm = query.isNotEmpty ? query : null;
+      String? estadoFilter = _filterEstado;
+      String? convencionFilter = _filterConvencion;
+      int? gestionIdFilter;
 
-      if (query.isEmpty) {
-        // If search is empty, fetch fresh documents
-        await _fetchDocuments();
-      } else {
-        // Use backend search with the query
-        final result = await DocumentoService.getDocumentos(
-          limit: 50,
-          search: query,
-        );
-
-        setState(() {
-          _filteredDocumentos = result['documentos'] as List<Documento>;
-        });
+      // Convert gestion name to ID if needed
+      if (_filterGestion != null) {
+        // For now, we'll need to handle gestion name to ID conversion
+        // This might require a separate lookup or the backend to accept names
+        gestionIdFilter = int.tryParse(_filterGestion!);
       }
+
+      // Handle specific column filters
+      if (_filterCodigo != null) {
+        searchTerm = _filterCodigo;
+      } else if (_filterNombre != null) {
+        searchTerm = _filterNombre;
+      }
+
+      // Perform server-side search using DocumentoService
+      final result = await DocumentoService.getDocumentos(
+        limit: 100, // Higher limit for search results
+        search: searchTerm,
+        estado: estadoFilter,
+        gestionId: gestionIdFilter,
+        convencion: convencionFilter,
+      );
+
+      final documentos = result['documentos'] as List<Documento>;
+
+      setState(() {
+        _documentos = documentos;
+        _filteredDocumentos = documentos;
+        _isLoading = false;
+      });
     } catch (e) {
       GlobalErrorService.showError('Error al buscar documentos: $e');
-      // Reset to show all documents on error
-      setState(() => _filteredDocumentos = _documentos);
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      // On error, try to fetch all documents
+      await _fetchDocuments();
+    }
+  }
+
+  /// Clears all filters and resets the document list
+  /// Performs fresh database fetch without any filters
+  Future<void> _clearAllFilters() async {
+    setState(() {
+      _searchController.clear();
+      _searchQuery = '';
+      _filterCodigo = null;
+      _filterNombre = null;
+      _filterEstado = null;
+      _filterConvencion = null;
+      _filterGestion = null;
+      _isLoading = true;
+    });
+
+    try {
+      // Fetch fresh documents without any filters or search terms
+      final result = await DocumentoService.getDocumentos(
+        limit: 20, // Back to default limit for initial load
+        // No search, estado, or gestionId parameters = fetch all
+      );
+
+      final documentos = result['documentos'] as List<Documento>;
+
+      setState(() {
+        _documentos = documentos;
+        _filteredDocumentos = documentos;
+        _isLoading = false;
+      });
+    } catch (e) {
+      GlobalErrorService.showError('Error al limpiar filtros: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// Shows lookup dialog for column filtering using the real lookup.dart widget
+  /// This makes API calls to search the database for large datasets
+  Future<void> _showColumnLookup(
+    BuildContext context,
+    String columnName,
+    Function(String?) onSelected,
+    String? currentValue,
+  ) async {
+    // Generate the appropriate API URL for each column type
+    String lookupUrl = _getLookupUrl(columnName);
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          width: 500,
+          height: 600,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.teal[600],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.filter_list, color: Colors.white),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Filtrar por $columnName',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Clear filter option
+              if (currentValue != null)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      onSelected(null);
+                      Navigator.of(context).pop();
+                    },
+                    icon: const Icon(Icons.clear_all),
+                    label: const Text('Mostrar todo (Limpiar filtro)'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange[600],
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+
+              // Real lookup widget with API integration
+              Expanded(
+                child: lookupPage(
+                  urllokup: lookupUrl,
+                  etiqueta: columnName,
+                  onCountSelected: () {
+                    // Handle selection count if needed
+                  },
+                  onItemSelected: (String id, String code, String name) {
+                    // For 'nombre' filter, use the display name instead of ID
+                    // For other filters, use the id parameter
+                    final selectedValue =
+                        columnName.toLowerCase() == 'nombre' ? name : id;
+                    onSelected(selectedValue);
+                    // DON'T call Navigator.pop() here - the lookup widget handles it
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Generates the appropriate lookup URL for each column type
+  String _getLookupUrl(String columnName) {
+    final String baseUrl = '${Constants.serverapp}/api';
+
+    switch (columnName.toLowerCase()) {
+      case 'código':
+        return '$baseUrl/documentos/lookup/codigo';
+      case 'nombre':
+        return '$baseUrl/documentos/lookup/nombre';
+      case 'estado':
+        return '$baseUrl/documentos/lookup/estado';
+      case 'convención':
+        return '$baseUrl/documentos/lookup/convencion';
+      case 'gestión':
+        return '$baseUrl/documentos/lookup/gestion';
+      case 'id':
+        return '$baseUrl/documentos/lookup/id';
+      default:
+        return '$baseUrl/documentos/lookup/general';
     }
   }
 
@@ -452,7 +674,6 @@ class _DocumentosPageState extends State<DocumentosPage> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
         // Search bar
         Row(
           children: [
@@ -481,7 +702,8 @@ class _DocumentosPageState extends State<DocumentosPage> {
                               _searchController.clear();
                               setState(() {
                                 _searchQuery = '';
-                                _filteredDocumentos = _documentos;
+                                _filteredDocumentos =
+                                    _applyFilters(_documentos);
                               });
                             },
                           )
@@ -506,6 +728,20 @@ class _DocumentosPageState extends State<DocumentosPage> {
               ),
               child: const Text('Consultar'),
             ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _clearAllFilters,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[600],
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              child: const Text('Limpiar'),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -514,17 +750,219 @@ class _DocumentosPageState extends State<DocumentosPage> {
             width: double.infinity,
             child: SingleChildScrollView(
               child: PaginatedDataTable(
-                columns: const <DataColumn>[
-                  DataColumn(label: Text('ID')),
-                  DataColumn(label: Text('Código')),
-                  DataColumn(label: Text('Nombre')),
-                  DataColumn(label: Text('Estado')),
-                  DataColumn(label: Text('Descripción')),
-                  DataColumn(label: Text('Convención')),
-                  DataColumn(label: Text('Gestión')),
-                  DataColumn(label: Text('Fecha')),
-                  DataColumn(label: Text('Eventos')),
-                  DataColumn(label: Text('Acciones')),
+                columns: [
+                  DataColumn(
+                    label: GestureDetector(
+                      onTap: () => _showColumnLookup(
+                        context,
+                        'ID',
+                        (value) async {
+                          setState(() {
+                            // Clear other filters when applying a new one
+                            _filterCodigo = null;
+                            _filterNombre = null;
+                            _filterEstado = null;
+                            _filterConvencion = null;
+                            _filterGestion = null;
+
+                            // Set the ID filter (using codigo field for ID filtering)
+                            if (value != null) {
+                              _filterCodigo = value;
+                            }
+                          });
+
+                          // Fetch filtered data from database
+                          await _applySearchFilter();
+                        },
+                        _filterCodigo,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('ID'),
+                          if (_filterCodigo != null) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.filter_alt,
+                                size: 14, color: Colors.blue),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: GestureDetector(
+                      onTap: () => _showColumnLookup(
+                        context,
+                        'Código',
+                        (value) async {
+                          setState(() {
+                            // Clear other filters when applying a new one
+                            _filterNombre = null;
+                            _filterEstado = null;
+                            _filterConvencion = null;
+                            _filterGestion = null;
+
+                            _filterCodigo = value;
+                          });
+
+                          // Fetch filtered data from database
+                          await _applySearchFilter();
+                        },
+                        _filterCodigo,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Código'),
+                          if (_filterCodigo != null) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.filter_alt,
+                                size: 14, color: Colors.blue),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: GestureDetector(
+                      onTap: () => _showColumnLookup(
+                        context,
+                        'Nombre',
+                        (value) async {
+                          setState(() {
+                            // Clear other filters when applying a new one
+                            _filterCodigo = null;
+                            _filterEstado = null;
+                            _filterConvencion = null;
+                            _filterGestion = null;
+
+                            _filterNombre = value;
+                          });
+
+                          // Fetch filtered data from database
+                          await _applySearchFilter();
+                        },
+                        _filterNombre,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Nombre'),
+                          if (_filterNombre != null) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.filter_alt,
+                                size: 14, color: Colors.blue),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: GestureDetector(
+                      onTap: () => _showColumnLookup(
+                        context,
+                        'Estado',
+                        (value) async {
+                          setState(() {
+                            // Clear other filters when applying a new one
+                            _filterCodigo = null;
+                            _filterNombre = null;
+                            _filterConvencion = null;
+                            _filterGestion = null;
+
+                            _filterEstado = value;
+                          });
+
+                          // Fetch filtered data from database
+                          await _applySearchFilter();
+                        },
+                        _filterEstado,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Estado'),
+                          if (_filterEstado != null) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.filter_alt,
+                                size: 14, color: Colors.blue),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const DataColumn(label: Text('Descripción')),
+                  DataColumn(
+                    label: GestureDetector(
+                      onTap: () => _showColumnLookup(
+                        context,
+                        'Convención',
+                        (value) async {
+                          setState(() {
+                            // Clear other filters when applying a new one
+                            _filterCodigo = null;
+                            _filterNombre = null;
+                            _filterEstado = null;
+                            _filterGestion = null;
+
+                            _filterConvencion = value;
+                          });
+
+                          // Fetch filtered data from database
+                          await _applySearchFilter();
+                        },
+                        _filterConvencion,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Convención'),
+                          if (_filterConvencion != null) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.filter_alt,
+                                size: 14, color: Colors.blue),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: GestureDetector(
+                      onTap: () => _showColumnLookup(
+                        context,
+                        'Gestión',
+                        (value) async {
+                          setState(() {
+                            // Clear other filters when applying a new one
+                            _filterCodigo = null;
+                            _filterNombre = null;
+                            _filterEstado = null;
+                            _filterConvencion = null;
+
+                            _filterGestion = value;
+                          });
+
+                          // Fetch filtered data from database
+                          await _applySearchFilter();
+                        },
+                        _filterGestion,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Gestión'),
+                          if (_filterGestion != null) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.filter_alt,
+                                size: 14, color: Colors.blue),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const DataColumn(label: Text('Fecha')),
+                  const DataColumn(label: Text('Eventos')),
+                  const DataColumn(label: Text('Acciones')),
                 ],
                 source: DocumentosDataSource(
                   documentsToShow,
