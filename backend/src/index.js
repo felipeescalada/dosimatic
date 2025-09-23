@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 // Load environment configuration
 if (process.env.npm_config_local || process.argv.includes('--local')) {
@@ -62,59 +61,8 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 const uploadsPath = process.env.UPLOADS_PATH || 'uploads';
 app.use('/uploads', express.static(path.join(__dirname, '..', uploadsPath)));
 
-// Configuración de Swagger
-const swaggerOptions = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'Sistema de Gestión Documental API',
-      version: '1.0.0',
-      description: 'API REST para sistema de gestión documental tipo Documatic',
-      contact: {
-        name: 'Equipo de Desarrollo',
-        email: 'desarrollo@empresa.com'
-      }
-    },
-    servers: [
-      {
-        url: `http://localhost:${process.env.PORT || 3500}`,
-        description: 'Servidor de desarrollo'
-      }
-    ],
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT'
-        }
-      }
-    }
-  },
-  apis: ['./src/routes/*.js'] // Rutas donde están las definiciones de Swagger
-};
-
-const specs = swaggerJsdoc(swaggerOptions);
-
-// Extract all unique tags from paths and sort them alphabetically
-const allTags = new Set();
-
-// First pass: collect all unique tags
-Object.values(specs.paths || {}).forEach(pathItem => {
-  Object.values(pathItem).forEach(operation => {
-    if (operation.tags && Array.isArray(operation.tags)) {
-      operation.tags.forEach(tag => allTags.add(tag));
-    }
-  });
-});
-
-// Convert Set to array of tag objects, sorted alphabetically
-specs.tags = Array.from(allTags)
-  .sort((a, b) => a.localeCompare(b, 'en', {sensitivity: 'base'}))
-  .map(tag => ({
-    name: tag,
-    description: `${tag.charAt(0).toUpperCase() + tag.slice(1)} related endpoints`
-  }));
+// Use the dedicated Swagger configuration
+const specs = require('./config/swagger');
 
 // Ruta de documentación Swagger
 app.use(
