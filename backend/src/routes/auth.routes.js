@@ -72,31 +72,58 @@ const nodemailer = require('nodemailer');
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await pool.query('SELECT * FROM usuarios WHERE email = $1', [
-      email
-    ]);
+    
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email y contraseña son requeridos' });
+    }
 
+    const user = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
+    
     if (user.rows.length === 0) {
+      console.log(`[AUTH] Login failed: Invalid credentials for ${email}`);
       return res.status(401).json({ message: 'Credenciales inválidas' });
     }
 
-    const validPassword = await bcrypt.compare(
-      password,
-      user.rows[0].password || ''
-    );
+    const userData = user.rows[0];
+
+    if (userData.activo === false) {
+      console.log(`[AUTH] Login blocked: Inactive account ${userData.id}`);
+      return res.status(401).json({ message: 'Cuenta desactivada' });
+    }
+
+    const validPassword = await bcrypt.compare(password, userData.password || '');
+    
     if (!validPassword) {
+      console.log(`[AUTH] Login failed: Invalid password for ${userData.id}`);
       return res.status(401).json({ message: 'Credenciales inválidas' });
     }
 
     const token = jwt.sign(
-      { id: user.rows[0].id },
+      { 
+        id: userData.id,
+        email: userData.email,
+        role: userData.rol 
+      },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '1d' }
     );
 
-    res.json({ token });
+    console.log(`[AUTH] Login successful for user ${userData.id} (${userData.rol})`);
+    res.json({ 
+      token,
+      user: {
+        id: userData.id,
+        email: userData.email,
+        nombre: userData.nombre,
+        rol: userData.rol
+      }
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Login error:', err);
+    res.status(500).json({ 
+      message: 'Error interno del servidor',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
