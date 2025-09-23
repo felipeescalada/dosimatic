@@ -189,12 +189,24 @@ class _DocumentoModalFormState extends State<DocumentoModalForm> {
         isSigned: false,
       );
 
+      String actionMessage;
       if (widget.documento == null) {
         Logger.i('Creating new documento: ${documento.codigo}');
         await DocumentoService.createDocumento(documento);
+        actionMessage = 'Documento creado exitosamente';
       } else {
         Logger.i('Updating documento: ${documento.codigo}');
         await DocumentoService.updateDocumento(documento);
+        actionMessage = 'Documento actualizado exitosamente';
+      }
+      
+      // Show success notification
+      if (mounted) {
+        GlobalErrorService.showSuccess(
+          actionMessage,
+          context: context,
+          duration: const Duration(seconds: 3),
+        );
       }
 
       if (mounted) {
