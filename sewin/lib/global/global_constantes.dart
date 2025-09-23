@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class Constants {
-  static String serverapp = 'http://localhost:3501';
+  static String serverapp = 'http://localhost:3500';
 
   // Text scaling factors
   static double getTextScaleFactor(BuildContext context, {double max = 1.5}) {
