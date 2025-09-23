@@ -91,15 +91,17 @@ class Documento {
     if (filters.search) {
       // Convert search to lowercase once and split into terms
       const searchTerm = filters.search.toLowerCase();
-      const searchTerms = searchTerm.split(/\s+/).filter(term => term.trim() !== '');
-      
+      const searchTerms = searchTerm
+        .split(/\s+/)
+        .filter(term => term.trim() !== '');
+
       if (searchTerms.length > 0) {
         const conditions = searchTerms.map((term, index) => {
           const paramIndex = paramCount + index + 1;
           // Use LOWER() function for case-insensitive search with index
           return `(LOWER(d.codigo) LIKE $${paramIndex} OR LOWER(d.nombre) LIKE $${paramIndex})`;
         });
-        
+
         sql += ` AND (${conditions.join(' AND ')})`;
         // Add terms with % wildcards for LIKE
         searchTerms.forEach(term => values.push(`%${term}%`));
