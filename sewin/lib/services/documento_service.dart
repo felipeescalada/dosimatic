@@ -5,7 +5,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/documento_model.dart';
-import 'logger_service.dart';
+import 'logger_service.dart' show Logger;
 
 class DocumentoService {
   static Future<String?> _getToken() async {
@@ -27,27 +27,47 @@ class DocumentoService {
   // Get all documents with pagination and filters
   static Future<Map<String, dynamic>> getDocumentos({
     int page = 1,
-    int limit = 10,
+    int limit = 20, // Default page size
     String? estado,
     int? gestionId,
     String? search,
+    String? convencion,
   }) async {
     try {
-      final queryParams = {
-        'page': page.toString(),
+      final offset = (page - 1) * limit;
+      final queryParams = <String, String>{
         'limit': limit.toString(),
-        if (estado != null) 'estado': estado,
-        if (gestionId != null) 'gestion_id': gestionId.toString(),
-        if (search != null && search.isNotEmpty) 'search': search,
+        'offset': offset.toString(),
+        if (estado != null && estado.isNotEmpty) 'estado': estado,
+        if (gestionId != null && gestionId > 0)
+          'gestion_id': gestionId.toString(),
+        if (search != null && search.isNotEmpty) 'search': search.trim(),
+        if (convencion != null && convencion.isNotEmpty)
+          'convencion': convencion,
       };
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/documentos').replace(queryParameters: queryParams),
+      final uri = Uri.parse('$baseUrl/documentos').replace(
+        queryParameters: queryParams,
+      );
+
+      Logger.d('Fetching documentos from: $uri');
+
+      final response = await http
+          .get(
+        uri,
         headers: await _getHeaders(),
+      )
+          .timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception(
+              'La solicitud ha tomado demasiado tiempo. Por favor, intente nuevamente.');
+        },
       );
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
+        final Map<String, dynamic> data =
+            json.decode(utf8.decode(response.bodyBytes));
         return {
           'documentos': (data['data'] as List)
               .map((json) => Documento.fromJson(json))
@@ -91,7 +111,6 @@ class DocumentoService {
       throw Exception('Error al cargar el documento: $e');
     }
   }
-
 
   // Create new document
   static Future<Documento> createDocumento(Documento documento) async {
