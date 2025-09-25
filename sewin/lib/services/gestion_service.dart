@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../global/global_constantes.dart';
 import '../models/gestion_model.dart';
 import 'logger_service.dart';
 
@@ -10,7 +11,7 @@ class GestionService {
     return prefs.getString('auth_token');
   }
 
-  static const String baseUrl = 'http://localhost:3500/api';
+  static String get baseUrl => '${Constants.serverapp}/api';
 
   // Headers for API requests
   static Future<Map<String, String>> _getHeaders() async {

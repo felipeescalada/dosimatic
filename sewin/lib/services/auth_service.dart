@@ -1,10 +1,11 @@
 import 'dart:convert' show json, base64Url, utf8;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sewin/global/global_constantes.dart';
 import 'package:sewin/services/logger_service.dart';
 
 class AuthService {
-  static const String baseUrl = 'http://localhost:3500/api';
+  static String get baseUrl => '${Constants.serverapp}/api';
   static const String tokenKey = 'auth_token';
 
   Future<Map<String, dynamic>> login(String email, String password) async {

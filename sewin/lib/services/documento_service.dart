@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../global/global_constantes.dart';
 import '../models/documento_model.dart';
 import 'logger_service.dart' show Logger;
 
@@ -13,7 +14,7 @@ class DocumentoService {
     return prefs.getString('auth_token');
   }
 
-  static const String baseUrl = 'http://localhost:3500/api';
+  static String get baseUrl => '${Constants.serverapp}/api';
 
   // Headers for API requests
   static Future<Map<String, String>> _getHeaders() async {
