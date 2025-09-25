@@ -54,25 +54,25 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: '/',
       routes: {
-        '/': (context) => const AuthGuard(
+        '/': (context) => AuthGuard(
               child: ContactListScreen(version: 0, title: 'Contactos'),
             ),
-        '/users': (context) => const AuthGuard(
+        '/users': (context) => AuthGuard(
               child: UsersScreen(),
             ),
-        '/documentos': (context) => const AuthGuard(
+        '/documentos': (context) => AuthGuard(
               child: DocumentosPage(),
             ),
-        '/contact1': (context) => const AuthGuard(
+        '/contact1': (context) => AuthGuard(
               child: ContactListScreen1(),
             ),
-        '/contact2': (context) => const AuthGuard(
+        '/contact2': (context) => AuthGuard(
               child: ContactListScreen2(),
             ),
-        '/contact3': (context) => const AuthGuard(
+        '/contact3': (context) => AuthGuard(
               child: ContactListScreen3(),
             ),
-        '/login': (context) => const LoginScreen(),
+        '/login': (context) => LoginScreen(),
         '/reset-password': (context) {
           final token = ModalRoute.of(context)?.settings.arguments as String?;
           return ResetPasswordFormScreen(token: token ?? '');
