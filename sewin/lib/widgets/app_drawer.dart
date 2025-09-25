@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'profile_widget.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -9,17 +10,9 @@ class AppDrawer extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(
-              color: Colors.blue,
-            ),
-            child: Text(
-              'Menu',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-              ),
-            ),
+          const SizedBox(
+            height: 120,
+            child: ProfileWidget(),
           ),
           ListTile(
             leading: const Icon(Icons.people),
