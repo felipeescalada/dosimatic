@@ -42,14 +42,6 @@ class _DocumentoModalFormState extends State<DocumentoModalForm> {
   String? _archivoFuentePath;
   String? _archivoPdfPath;
 
-  // Estados posibles del documento
-  final List<Map<String, String>> _estados = [
-    {'value': 'borrador', 'label': 'Borrador'},
-    {'value': 'en_revision', 'label': 'En Revisión'},
-    {'value': 'aprobado', 'label': 'Aprobado'},
-    {'value': 'publicado', 'label': 'Publicado'},
-  ];
-
   // Convenciones posibles
   final List<String> _convenciones = [
     'Manual',
@@ -199,7 +191,7 @@ class _DocumentoModalFormState extends State<DocumentoModalForm> {
         await DocumentoService.updateDocumento(documento);
         actionMessage = 'Documento actualizado exitosamente';
       }
-      
+
       // Show success notification
       if (mounted) {
         GlobalErrorService.showSuccess(
@@ -229,369 +221,390 @@ class _DocumentoModalFormState extends State<DocumentoModalForm> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Dialog(
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: screenWidth * 0.25, // 25% margin on each side
+        vertical: screenHeight * 0.05, // 5% margin top/bottom
+      ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: screenWidth * 0.9, // Max 70% of screen width
+            minWidth: 400, // Minimum width for usability
+            maxHeight: screenHeight * 0.9, // Max 90% of screen height
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    widget.documento == null
-                        ? 'Nuevo Documento'
-                        : 'Editar Documento',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        widget.documento == null
+                            ? 'Nuevo Documento'
+                            : 'Editar Documento',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-              // Legend for required fields
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue[200]!),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.blue[700], size: 16),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Los campos con borde rojo son obligatorios',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Gestión (Required)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Gestión',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                  // Legend for required fields
                   Container(
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
-                      border:
-                          Border.all(color: Colors.red.withAlpha(76), width: 1),
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
                     ),
-                    child: DropdownButtonFormField<int>(
-                      value:
-                          _gestiones.any((g) => g.id == _selectedGestionId)
-                              ? _selectedGestionId
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            color: Colors.blue[700], size: 16),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Los campos con borde rojo son obligatorios',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Gestión (Required)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Gestión',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                              color: Colors.red.withAlpha(76), width: 1),
+                        ),
+                        child: DropdownButtonFormField<int>(
+                          value:
+                              _gestiones.any((g) => g.id == _selectedGestionId)
+                                  ? _selectedGestionId
+                                  : null,
+                          items: _loadingGestiones
+                              ? []
+                              : _gestiones.map((gestion) {
+                                  return DropdownMenuItem<int>(
+                                    value: gestion.id,
+                                    child: Text(gestion.nombre),
+                                  );
+                                }).toList(),
+                          onChanged: _loadingGestiones
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    _selectedGestionId = value;
+                                    _selectedGestionNombre = _gestiones
+                                        .firstWhere((g) => g.id == value)
+                                        .nombre;
+                                  });
+                                },
+                          decoration: const InputDecoration(
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 16),
+                            border: InputBorder.none,
+                          ),
+                          hint: _loadingGestiones
+                              ? const Text('Cargando gestiones...')
+                              : const Text('Seleccionar Gestión'),
+                          validator: (value) {
+                            if (value == null) {
+                              return 'Por favor seleccione una gestión';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Convención (Required)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Convención',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                              color: Colors.red.withAlpha(76), width: 1),
+                        ),
+                        child: DropdownButtonFormField<String>(
+                          value: _convenciones.contains(_selectedConvencion)
+                              ? _selectedConvencion
                               : null,
-                      items: _loadingGestiones
-                          ? []
-                          : _gestiones.map((gestion) {
-                              return DropdownMenuItem<int>(
-                                value: gestion.id,
-                                child: Text(gestion.nombre),
-                              );
-                            }).toList(),
-                      onChanged: _loadingGestiones
-                          ? null
-                          : (value) {
-                              setState(() {
-                                _selectedGestionId = value;
-                                _selectedGestionNombre = _gestiones
-                                    .firstWhere((g) => g.id == value).nombre;
-                              });
-                            },
-                      decoration: const InputDecoration(
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                        border: InputBorder.none,
-                      ),
-                      hint: _loadingGestiones
-                          ? const Text('Cargando gestiones...')
-                          : const Text('Seleccionar Gestión'),
-                      validator: (value) {
-                        if (value == null) {
-                          return 'Por favor seleccione una gestión';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Convención (Required)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Convención',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
-                      border:
-                          Border.all(color: Colors.red.withAlpha(76), width: 1),
-                    ),
-                    child: DropdownButtonFormField<String>(
-                      value: _convenciones.contains(_selectedConvencion)
-                          ? _selectedConvencion
-                          : null,
-                      items: _convenciones.map((convencion) {
-                        return DropdownMenuItem<String>(
-                          value: convencion,
-                          child: Text(convencion),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedConvencion = value;
-                        });
-                      },
-                      decoration: const InputDecoration(
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                        border: InputBorder.none,
-                      ),
-                      hint: const Text('Seleccionar Convención'),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Por favor seleccione una convención';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Documento vinculado
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Documento vinculado',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<int>(
-                    initialValue: _documentosDisponibles
-                            .any((d) => d['id'] == _documentoVinculadoId)
-                        ? _documentoVinculadoId
-                        : null,
-                    items: _loadingDocumentos
-                        ? []
-                        : _documentosDisponibles
-                            .map<DropdownMenuItem<int>>(
-                                (doc) => DropdownMenuItem<int>(
-                                      value: doc['id'] as int,
-                                      child: Text(doc['display'] as String),
-                                    ))
-                            .toList(),
-                    onChanged: _loadingDocumentos
-                        ? null
-                        : (value) {
+                          items: _convenciones.map((convencion) {
+                            return DropdownMenuItem<String>(
+                              value: convencion,
+                              child: Text(convencion),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
                             setState(() {
-                              _documentoVinculadoId = value;
+                              _selectedConvencion = value;
                             });
                           },
-                    decoration: const InputDecoration(
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                      border: OutlineInputBorder(),
-                    ),
-                    hint: _loadingDocumentos
-                        ? const Text('Cargando documentos...')
-                        : const Text('Seleccionar documento'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Archivo Fuente
-              _buildFileUploadField(
-                'Archivo Fuente',
-                _archivoFuentePath ?? 'Seleccionar archivo fuente',
-                () => _selectFile(isSource: true),
-              ),
-              const SizedBox(height: 16),
-
-              // Archivo PDF
-              _buildFileUploadField(
-                'Archivo PDF',
-                _archivoPdfPath ?? 'Seleccionar archivo PDF',
-                () => _selectFile(isSource: false),
-              ),
-              const SizedBox(height: 16),
-
-              // Identificador (Required)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Identificador',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
-                      border:
-                          Border.all(color: Colors.red.withAlpha(76), width: 1),
-                    ),
-                    child: TextFormField(
-                      controller: _codigoController,
-                      decoration: const InputDecoration(
-                        hintText: 'MGH-01-09-01',
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                        border: InputBorder.none,
+                          decoration: const InputDecoration(
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 16),
+                            border: InputBorder.none,
+                          ),
+                          hint: const Text('Seleccionar Convención'),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Por favor seleccione una convención';
+                            }
+                            return null;
+                          },
+                        ),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Por favor ingrese un identificador';
-                        }
-                        return null;
-                      },
-                    ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-              // Nombre del Documento (Required)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Nombre del Documento',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
-                      border:
-                          Border.all(color: Colors.red.withAlpha(76), width: 1),
-                    ),
-                    child: TextFormField(
-                      controller: _nombreController,
-                      decoration: const InputDecoration(
-                        hintText: 'DOCUMENTO DE PRUEBA',
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                        border: InputBorder.none,
+                  // Documento vinculado
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Documento vinculado',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Por favor ingrese un nombre';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Descripción del Documento (opcional)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Descripción',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: Colors.grey[300]!, width: 1),
-                    ),
-                    child: TextFormField(
-                      controller: _descripcionController,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        hintText: 'Descripción detallada del documento...',
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                        border: InputBorder.none,
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int>(
+                        initialValue: _documentosDisponibles
+                                .any((d) => d['id'] == _documentoVinculadoId)
+                            ? _documentoVinculadoId
+                            : null,
+                        items: _loadingDocumentos
+                            ? []
+                            : _documentosDisponibles
+                                .map<DropdownMenuItem<int>>(
+                                    (doc) => DropdownMenuItem<int>(
+                                          value: doc['id'] as int,
+                                          child: Text(doc['display'] as String),
+                                        ))
+                                .toList(),
+                        onChanged: _loadingDocumentos
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  _documentoVinculadoId = value;
+                                });
+                              },
+                        decoration: const InputDecoration(
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 16),
+                          border: OutlineInputBorder(),
+                        ),
+                        hint: _loadingDocumentos
+                            ? const Text('Cargando documentos...')
+                            : const Text('Seleccionar documento'),
                       ),
-                      // Optional field - no validation needed
-                    ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
-              // Botones de acción
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed:
-                        _isLoading ? null : () => Navigator.of(context).pop(),
-                    child: const Text('Cancelar'),
+                  // Archivo Fuente
+                  _buildFileUploadField(
+                    'Archivo Fuente',
+                    _archivoFuentePath ?? 'Seleccionar archivo fuente',
+                    () => _selectFile(isSource: true),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _isLoading ? null : _saveDocumento,
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(widget.documento == null
-                            ? 'Guardar'
-                            : 'Actualizar'),
+                  const SizedBox(height: 16),
+
+                  // Archivo PDF
+                  _buildFileUploadField(
+                    'Archivo PDF',
+                    _archivoPdfPath ?? 'Seleccionar archivo PDF',
+                    () => _selectFile(isSource: false),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Identificador (Required)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Identificador',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                              color: Colors.red.withAlpha(76), width: 1),
+                        ),
+                        child: TextFormField(
+                          controller: _codigoController,
+                          decoration: const InputDecoration(
+                            hintText: 'MGH-01-09-01',
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 16),
+                            border: InputBorder.none,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Por favor ingrese un identificador';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Nombre del Documento (Required)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Nombre del Documento',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                              color: Colors.red.withAlpha(76), width: 1),
+                        ),
+                        child: TextFormField(
+                          controller: _nombreController,
+                          decoration: const InputDecoration(
+                            hintText: 'DOCUMENTO DE PRUEBA',
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 16),
+                            border: InputBorder.none,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Por favor ingrese un nombre';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Descripción del Documento (opcional)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Descripción',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          border:
+                              Border.all(color: Colors.grey[300]!, width: 1),
+                        ),
+                        child: TextFormField(
+                          controller: _descripcionController,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            hintText: 'Descripción detallada del documento...',
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 16),
+                            border: InputBorder.none,
+                          ),
+                          // Optional field - no validation needed
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Botones de acción
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: const Text('Cancelar'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _isLoading ? null : _saveDocumento,
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Text(widget.documento == null
+                                ? 'Guardar'
+                                : 'Actualizar'),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
