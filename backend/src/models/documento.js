@@ -70,8 +70,16 @@ class Documento {
    * Obtener todos los documentos con filtros opcionales
    */
   static async findAll(filters = {}) {
+    // Base query for counting total documents
+    let countSql = `
+      SELECT COUNT(*) as total
+      FROM documentos d
+      WHERE d.estado != 'eliminado'
+    `;
+
+    // Base query for fetching documents
     let sql = `
-      SELECT d.*, 
+      SELECT d.*,
              g.nombre as gestion_nombre,
              uc.nombre as creador_nombre,
              ur.nombre as revisor_nombre,
@@ -84,10 +92,11 @@ class Documento {
       WHERE d.estado != 'eliminado'
     `;
 
+    const countValues = [];
     const values = [];
     let paramCount = 0;
 
-    // Aplicar filtros
+    // Aplicar filtros para el conteo y la consulta principal
     if (filters.search) {
       // Convert search to lowercase once and split into terms
       const searchTerm = filters.search.toLowerCase();
@@ -98,45 +107,58 @@ class Documento {
       if (searchTerms.length > 0) {
         const conditions = searchTerms.map((term, index) => {
           const paramIndex = paramCount + index + 1;
-          // Use LOWER() function for case-insensitive search with index
           return `(LOWER(d.codigo) LIKE $${paramIndex} OR LOWER(d.nombre) LIKE $${paramIndex})`;
         });
 
+        countSql += ` AND (${conditions.join(' AND ')})`;
         sql += ` AND (${conditions.join(' AND ')})`;
         // Add terms with % wildcards for LIKE
-        searchTerms.forEach(term => values.push(`%${term}%`));
+        searchTerms.forEach(term => {
+          countValues.push(`%${term}%`);
+          values.push(`%${term}%`);
+        });
         paramCount += searchTerms.length;
       }
     } else {
       // Filtros individuales (mantener compatibilidad)
       if (filters.codigo) {
         paramCount++;
+        countSql += ` AND d.codigo ILIKE $${paramCount}`;
         sql += ` AND d.codigo ILIKE $${paramCount}`;
+        countValues.push(`%${filters.codigo}%`);
         values.push(`%${filters.codigo}%`);
       }
 
       if (filters.nombre) {
         paramCount++;
+        countSql += ` AND d.nombre ILIKE $${paramCount}`;
         sql += ` AND d.nombre ILIKE $${paramCount}`;
+        countValues.push(`%${filters.nombre}%`);
         values.push(`%${filters.nombre}%`);
       }
     }
 
     if (filters.gestion_id) {
       paramCount++;
+      countSql += ` AND d.gestion_id = $${paramCount}`;
       sql += ` AND d.gestion_id = $${paramCount}`;
+      countValues.push(filters.gestion_id);
       values.push(filters.gestion_id);
     }
 
     if (filters.convencion) {
       paramCount++;
+      countSql += ` AND d.convencion = $${paramCount}`;
       sql += ` AND d.convencion = $${paramCount}`;
+      countValues.push(filters.convencion);
       values.push(filters.convencion);
     }
 
     if (filters.estado) {
       paramCount++;
+      countSql += ` AND d.estado = $${paramCount}`;
       sql += ` AND d.estado = $${paramCount}`;
+      countValues.push(filters.estado);
       values.push(filters.estado);
     }
 
@@ -156,8 +178,28 @@ class Documento {
       values.push(parseInt(filters.offset));
     }
 
-    const result = await query(sql, values);
-    return result.rows;
+    // Execute both queries in parallel for better performance
+    const [countResult, dataResult] = await Promise.all([
+      query(countSql, countValues),
+      query(sql, values)
+    ]);
+
+    const total = parseInt(countResult.rows[0].total);
+    const documents = dataResult.rows;
+
+    const limit = filters.limit || 10;
+    const offset = filters.offset || 0;
+    const currentPage = Math.floor(offset / limit) + 1;
+    const pages = Math.ceil(total / limit);
+
+    return {
+      documents: documents,
+      total: total,
+      pages: pages,
+      currentPage: currentPage,
+      limit: limit,
+      offset: offset
+    };
   }
 
   /**
@@ -349,9 +391,19 @@ class Documento {
   }
 
   /**
-   * Obtener documentos pendientes de revisión
+   * Obtener documentos pendientes de revisión con paginación
    */
-  static async getPendientesRevision() {
+  static async getPendientesRevision(page = 1, limit = 10) {
+    const offset = (page - 1) * limit;
+    
+    // Query para obtener el total de documentos
+    const countSql = `
+      SELECT COUNT(*) as total
+      FROM documentos d
+      WHERE d.estado = 'pendiente_revision'
+    `;
+    
+    // Query para obtener los documentos paginados
     const sql = `
       SELECT d.*, 
              g.nombre as gestion_nombre,
@@ -361,16 +413,48 @@ class Documento {
       LEFT JOIN usuarios uc ON d.usuario_creador = uc.id
       WHERE d.estado = 'pendiente_revision'
       ORDER BY d.fecha_creacion ASC
+      LIMIT $1 OFFSET $2
     `;
 
-    const result = await query(sql);
-    return result.rows;
+    const [countResult, dataResult] = await Promise.all([
+      query(countSql),
+      query(sql, [limit, offset])
+    ]);
+
+    const total = parseInt(countResult.rows[0].total);
+    const pages = Math.ceil(total / limit);
+    const currentPage = page;
+    const hasNext = page < pages;
+    const hasPrev = page > 1;
+
+    return {
+      data: dataResult.rows,
+      pagination: {
+        total,
+        pages,
+        currentPage,
+        limit,
+        offset,
+        hasNext,
+        hasPrev
+      }
+    };
   }
 
   /**
-   * Obtener documentos pendientes de aprobación
+   * Obtener documentos pendientes de aprobación con paginación
    */
-  static async getPendientesAprobacion() {
+  static async getPendientesAprobacion(page = 1, limit = 10) {
+    const offset = (page - 1) * limit;
+    
+    // Query para obtener el total de documentos
+    const countSql = `
+      SELECT COUNT(*) as total
+      FROM documentos d
+      WHERE d.estado = 'pendiente_aprobacion'
+    `;
+    
+    // Query para obtener los documentos paginados
     const sql = `
       SELECT d.*, 
              g.nombre as gestion_nombre,
@@ -382,10 +466,32 @@ class Documento {
       LEFT JOIN usuarios ur ON d.usuario_revisor = ur.id
       WHERE d.estado = 'pendiente_aprobacion'
       ORDER BY d.fecha_creacion ASC
+      LIMIT $1 OFFSET $2
     `;
 
-    const result = await query(sql);
-    return result.rows;
+    const [countResult, dataResult] = await Promise.all([
+      query(countSql),
+      query(sql, [limit, offset])
+    ]);
+
+    const total = parseInt(countResult.rows[0].total);
+    const pages = Math.ceil(total / limit);
+    const currentPage = page;
+    const hasNext = page < pages;
+    const hasPrev = page > 1;
+
+    return {
+      data: dataResult.rows,
+      pagination: {
+        total,
+        pages,
+        currentPage,
+        limit,
+        offset,
+        hasNext,
+        hasPrev
+      }
+    };
   }
 
   /**
