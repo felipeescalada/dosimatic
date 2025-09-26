@@ -439,11 +439,52 @@ router.patch('/:id/rechazar', DocumentoController.rechazar);
  * @swagger
  * /api/documentos/pendientes/revision:
  *   get:
- *     summary: Obtener documentos pendientes de revisión
+ *     summary: Obtener documentos pendientes de revisión con paginación
  *     tags: [Documentos]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Número de página
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Límite de resultados por página
  *     responses:
  *       200:
- *         description: Lista de documentos pendientes de revisión
+ *         description: Lista de documentos pendientes de revisión con paginación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Documento'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     pages:
+ *                       type: integer
+ *                     currentPage:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     hasNext:
+ *                       type: boolean
+ *                     hasPrev:
+ *                       type: boolean
  *       500:
  *         description: Error interno del servidor
  */
@@ -453,11 +494,52 @@ router.get('/pendientes/revision', DocumentoController.getPendientesRevision);
  * @swagger
  * /api/documentos/pendientes/aprobacion:
  *   get:
- *     summary: Obtener documentos pendientes de aprobación
+ *     summary: Obtener documentos pendientes de aprobación con paginación
  *     tags: [Documentos]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Número de página
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Límite de resultados por página
  *     responses:
  *       200:
- *         description: Lista de documentos pendientes de aprobación
+ *         description: Lista de documentos pendientes de aprobación con paginación
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Documento'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     pages:
+ *                       type: integer
+ *                     currentPage:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     hasNext:
+ *                       type: boolean
+ *                     hasPrev:
+ *                       type: boolean
  *       500:
  *         description: Error interno del servidor
  */
