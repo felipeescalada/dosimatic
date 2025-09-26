@@ -39,9 +39,8 @@ class PaginationControls extends StatelessWidget {
           Text(
             'Mostrando ${(currentPage - 1) * itemsPerPage + 1}-${currentPage * itemsPerPage > totalCount ? totalCount : currentPage * itemsPerPage}',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 14,
               color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
             ),
           ),
           // Navigation buttons
