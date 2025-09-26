@@ -73,8 +73,13 @@ class DocumentoService {
           'documentos': (data['data'] as List)
               .map((json) => Documento.fromJson(json))
               .toList(),
-          'total': data['total'] ?? 0,
-          'pages': data['pages'] ?? 1,
+          'total': data['pagination']['total'] ?? 0,
+          'pages': data['pagination']['pages'] ?? 1,
+          'currentPage': data['pagination']['currentPage'] ?? 1,
+          'limit': data['pagination']['limit'] ?? limit,
+          'offset': data['pagination']['offset'] ?? offset,
+          'hasNext': data['pagination']['hasNext'] ?? false,
+          'hasPrev': data['pagination']['hasPrev'] ?? false,
         };
       } else {
         Logger.e('Failed to load documents',
@@ -305,45 +310,36 @@ class DocumentoService {
     }
   }
 
-  // Consolidated method to get pending documents count
-  static Future<int> _getPendientesCount(String type) async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/documentos/pendientes/$type'),
-        headers: await _getHeaders(),
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        final List documents = data['data'] ?? [];
-        return documents.length;
-      } else {
-        Logger.e('Failed to get pending $type count',
-            error: 'Status: ${response.statusCode}');
-        throw Exception(
-            'Error al obtener pendientes de $type: ${response.statusCode}');
-      }
-    } catch (e) {
-      Logger.e('Error getting pending $type count', error: e);
-      throw Exception('Error al obtener pendientes de $type: $e');
-    }
-  }
-
   // Get pending documents for review count
   static Future<int> getPendientesRevisionCount() async {
-    return _getPendientesCount('revision');
+    try {
+      final result = await _getPendientesList('revision',
+          page: 1, limit: 1, countOnly: true);
+      return result['total'] as int;
+    } catch (e) {
+      Logger.e('Error getting pending revision count', error: e);
+      return 0;
+    }
   }
 
   // Get pending documents for approval count
   static Future<int> getPendientesAprobacionCount() async {
-    return _getPendientesCount('aprobacion');
+    try {
+      final result = await _getPendientesList('aprobacion',
+          page: 1, limit: 1, countOnly: true);
+      return result['total'] as int;
+    } catch (e) {
+      Logger.e('Error getting pending approval count', error: e);
+      return 0;
+    }
   }
 
   // Consolidated method to get pending documents list
-  static Future<List<Documento>> _getPendientesList(
+  static Future<Map<String, dynamic>> _getPendientesList(
     String type, {
     int page = 1,
     int limit = 10,
+    bool countOnly = false,
   }) async {
     try {
       final queryParams = {
@@ -359,9 +355,19 @@ class DocumentoService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
-        return (data['data'] as List)
-            .map((json) => Documento.fromJson(json))
-            .toList();
+        return {
+          'documentos': (data['data'] as List)
+              .map((json) => Documento.fromJson(json))
+              .toList(),
+          'total':
+              data['pagination']?['total'] ?? (data['data'] as List).length,
+          'pages': data['pagination']?['pages'] ?? 1,
+          'currentPage': data['pagination']?['currentPage'] ?? page,
+          'limit': data['pagination']?['limit'] ?? limit,
+          'offset': data['pagination']?['offset'] ?? 0,
+          'hasNext': data['pagination']?['hasNext'] ?? false,
+          'hasPrev': data['pagination']?['hasPrev'] ?? false,
+        };
       } else {
         Logger.e('Failed to load pending $type list',
             error: 'Status: ${response.statusCode}');
@@ -374,16 +380,16 @@ class DocumentoService {
     }
   }
 
-  // Get pending documents for review (full list)
-  static Future<List<Documento>> getPendientesRevision({
+  // Get pending documents for review with pagination
+  static Future<Map<String, dynamic>> getPendientesRevision({
     int page = 1,
     int limit = 10,
   }) async {
     return _getPendientesList('revision', page: page, limit: limit);
   }
 
-  // Get pending documents for approval (full list)
-  static Future<List<Documento>> getPendientesAprobacion({
+  // Get pending documents for approval with pagination
+  static Future<Map<String, dynamic>> getPendientesAprobacion({
     int page = 1,
     int limit = 10,
   }) async {
