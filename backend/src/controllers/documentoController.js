@@ -140,7 +140,7 @@ class DocumentoController {
           : undefined,
         convencion: req.query.convencion,
         estado: req.query.estado,
-        limit: req.query.limit ? parseInt(req.query.limit) : 50,
+        limit: req.query.limit ? parseInt(req.query.limit) : 10,
         offset: req.query.offset ? parseInt(req.query.offset) : 0
       };
 
@@ -151,15 +151,20 @@ class DocumentoController {
         }
       });
 
-      const documentos = await Documento.findAll(filters);
+      const result = await Documento.findAll(filters);
+      const { documents, total, pages, currentPage, limit, offset } = result;
 
       res.json({
         success: true,
-        data: documentos,
+        data: documents,
         pagination: {
-          limit: filters.limit,
-          offset: filters.offset,
-          total: documentos.length
+          total: total,
+          pages: pages,
+          currentPage: currentPage,
+          limit: limit,
+          offset: offset,
+          hasNext: currentPage < pages,
+          hasPrev: currentPage > 1
         }
       });
     } catch (error) {
@@ -463,14 +468,18 @@ class DocumentoController {
     }
   }
 
-  // Obtener documentos pendientes de revisión
+  // Obtener documentos pendientes de revisión con paginación
   static async getPendientesRevision(req, res) {
     try {
-      const documentos = await Documento.getPendientesRevision();
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+
+      const result = await Documento.getPendientesRevision(page, limit);
 
       res.json({
         success: true,
-        data: documentos
+        data: result.data,
+        pagination: result.pagination
       });
     } catch (error) {
       console.error('Error obteniendo pendientes de revisión:', error);
@@ -481,14 +490,18 @@ class DocumentoController {
     }
   }
 
-  // Obtener documentos pendientes de aprobación
+  // Obtener documentos pendientes de aprobación con paginación
   static async getPendientesAprobacion(req, res) {
     try {
-      const documentos = await Documento.getPendientesAprobacion();
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+
+      const result = await Documento.getPendientesAprobacion(page, limit);
 
       res.json({
         success: true,
-        data: documentos
+        data: result.data,
+        pagination: result.pagination
       });
     } catch (error) {
       console.error('Error obteniendo pendientes de aprobación:', error);
@@ -1064,42 +1077,6 @@ class DocumentoController {
       res.status(500).json({
         success: false,
         message: `Error firmando documento: ${error.message}`
-      });
-    }
-  }
-
-  // Obtener documentos pendientes de revisión
-  static async getPendientesRevision(req, res) {
-    try {
-      const documentos = await Documento.getPendientesRevision();
-
-      res.json({
-        success: true,
-        data: documentos
-      });
-    } catch (error) {
-      console.error('Error obteniendo pendientes de revisión:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error interno del servidor'
-      });
-    }
-  }
-
-  // Obtener documentos pendientes de aprobación
-  static async getPendientesAprobacion(req, res) {
-    try {
-      const documentos = await Documento.getPendientesAprobacion();
-
-      res.json({
-        success: true,
-        data: documentos
-      });
-    } catch (error) {
-      console.error('Error obteniendo pendientes de aprobación:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error interno del servidor'
       });
     }
   }
