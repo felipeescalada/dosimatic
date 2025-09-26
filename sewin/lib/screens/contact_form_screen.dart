@@ -24,7 +24,8 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _zipCodeController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
   int _selectedCountry = 1;
   int _selectedCity = 1;
   bool _obscurePassword = true;
@@ -80,7 +81,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 24),
-              
+
               // First Name and Last Name Row
               Row(
                 children: [
@@ -89,6 +90,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                       controller: _firstNameController,
                       labelText: 'First Name',
                       hintText: 'Enter First Name',
+                      maxLines: 1,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -97,6 +99,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                       controller: _lastNameController,
                       labelText: 'Last Name',
                       hintText: 'Enter Last Name',
+                      maxLines: 1,
                     ),
                   ),
                 ],
@@ -104,6 +107,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
               const SizedBox(height: 16),
 
               CustomTextField(
+                maxLines: 1,
                 controller: _businessNameController,
                 labelText: 'Business Name',
                 hintText: 'Enter Business Name',
@@ -111,6 +115,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
               const SizedBox(height: 16),
 
               CustomTextField(
+                maxLines: 1,
                 controller: _emailController,
                 labelText: 'Email Address',
                 hintText: 'Enter Email Address',
@@ -119,6 +124,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
               const SizedBox(height: 16),
 
               CustomTextField(
+                maxLines: 1,
                 controller: _phoneController,
                 labelText: 'Phone Number',
                 hintText: '+1684 XXX XXXX XXX',
@@ -169,6 +175,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: CustomTextField(
+                      maxLines: 1,
                       controller: _zipCodeController,
                       labelText: 'Zip Code',
                       hintText: 'Enter Zip Code',
@@ -230,6 +237,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
               const SizedBox(height: 16),
 
               CustomTextField(
+                maxLines: 1,
                 controller: _passwordController,
                 labelText: 'Password',
                 hintText: 'Enter Password',
@@ -248,13 +256,16 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
               const SizedBox(height: 16),
 
               CustomTextField(
+                maxLines: 1,
                 controller: _confirmPasswordController,
                 labelText: 'Confirm Password',
                 hintText: 'Enter Confirm Password',
                 obscureText: _obscureConfirmPassword,
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                    _obscureConfirmPassword
+                        ? Icons.visibility_off
+                        : Icons.visibility,
                   ),
                   onPressed: () {
                     setState(() {
@@ -280,7 +291,8 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                               builder: (context) => AlertDialog(
                                 title: Row(
                                   children: [
-                                    Icon(Icons.error_outline, color: Colors.red[700]),
+                                    Icon(Icons.error_outline,
+                                        color: Colors.red[700]),
                                     const SizedBox(width: 8),
                                     const Text('Error Details'),
                                   ],
@@ -325,7 +337,8 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                       ),
                       child: const Text(
                         'Cancel',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w500),
                       ),
                     ),
                   ),
@@ -343,7 +356,8 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                                   });
 
                                   final contact = Contact(
-                                    idContact: widget.contact?.idContact ?? ContactService.generateId(),
+                                    idContact: widget.contact?.idContact ??
+                                        ContactService.generateId(),
                                     firstName: _firstNameController.text,
                                     lastName: _lastNameController.text,
                                     businessName: _businessNameController.text,
@@ -354,7 +368,8 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                                     zipCode: _zipCodeController.text,
                                     frontPartUrl: '',
                                     backPartUrl: '',
-                                    createdAt: widget.contact?.createdAt ?? DateTime.now(),
+                                    createdAt: widget.contact?.createdAt ??
+                                        DateTime.now(),
                                   );
 
                                   // TODO: Implement API call here
@@ -367,7 +382,8 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                                   // }
 
                                   // Temporary: just return the contact
-                                  await Future.delayed(const Duration(seconds: 1)); // Simulated API call
+                                  await Future.delayed(const Duration(
+                                      seconds: 1)); // Simulated API call
                                   Navigator.pop(context, contact);
                                 } catch (e) {
                                   setState(() {
@@ -396,12 +412,14 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                             )
                           : const Text(
                               'Accept',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w500),
                             ),
                     ),
                   ),

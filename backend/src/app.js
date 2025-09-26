@@ -7,14 +7,20 @@ require('dotenv').config();
 
 const { testConnection } = require('./config/database');
 const documentosRoutes = require('./routes/documentos');
+const authRoutes = require('./routes/auth.routes');
+const userRoutes = require('./routes/user.routes');
+const usersRoutes = require('./routes/users');
 
 const app = express();
 
 // Configuración de CORS
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3001,http://localhost:3500',
+  origin:
+    process.env.CORS_ORIGIN || 'http://localhost:3001,http://localhost:3500',
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
 // Middleware global
@@ -55,17 +61,26 @@ const swaggerOptions = {
       }
     }
   },
-  apis: ['./src/routes/*.js'], // Rutas donde están las definiciones de Swagger
+  apis: ['./src/routes/*.js'] // Rutas donde están las definiciones de Swagger
 };
 
 const specs = swaggerJsdoc(swaggerOptions);
 
 // Ruta de documentación Swagger
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
-  explorer: true,
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'Sistema Documental API'
-}));
+app.use(
+  '/api-docs',
+  swaggerUi.serve,
+  swaggerUi.setup(specs, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Sistema Documental API',
+    swaggerOptions: {
+      tagsSorter: (a, b) => {
+        return a.localeCompare(b);
+      }
+    }
+  })
+);
 
 // Ruta de salud del servidor
 app.get('/health', (req, res) => {
@@ -82,7 +97,8 @@ app.get('/api', (req, res) => {
   res.json({
     name: 'Sistema de Gestión Documental API',
     version: '1.0.0',
-    description: 'API REST para gestión de documentos con control de versiones y flujo de aprobación',
+    description:
+      'API REST para gestión de documentos con control de versiones y flujo de aprobación',
     endpoints: {
       documentos: '/api/documentos',
       swagger: '/api-docs',
@@ -93,6 +109,9 @@ app.get('/api', (req, res) => {
 
 // Rutas de la API
 app.use('/api/documentos', documentosRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/users', usersRoutes);
 
 // Middleware de manejo de errores 404
 app.use('*', (req, res) => {
@@ -111,7 +130,7 @@ app.use('*', (req, res) => {
 // Middleware global de manejo de errores
 app.use((error, req, res, next) => {
   console.error('Error no manejado:', error);
-  
+
   // Error de validación de Joi
   if (error.isJoi) {
     return res.status(400).json({
@@ -173,7 +192,7 @@ const initializeServer = async () => {
     }
 
     const PORT = process.env.PORT || 3001;
-    
+
     app.listen(PORT, () => {
       console.log('🚀 Servidor iniciado exitosamente');
       console.log(`📡 Puerto: ${PORT}`);
@@ -183,7 +202,6 @@ const initializeServer = async () => {
       console.log(`📋 API Info: http://localhost:${PORT}/api`);
       console.log('─'.repeat(50));
     });
-
   } catch (error) {
     console.error('❌ Error al inicializar el servidor:', error.message);
     process.exit(1);

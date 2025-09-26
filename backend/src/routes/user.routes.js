@@ -59,12 +59,12 @@ router.post('/', async (req, res) => {
   try {
     const { name, email, password } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     const newUser = await pool.query(
-      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
+      'INSERT INTO usuarios (nombre, email, password) VALUES ($1, $2, $3) RETURNING id, nombre as name, email',
       [name, email, hashedPassword]
     );
-    
+
     res.status(201).json(newUser.rows[0]);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -98,14 +98,14 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const user = await pool.query(
-      'SELECT id, name, email FROM users WHERE id = $1',
+      'SELECT id, nombre as name, email FROM usuarios WHERE id = $1',
       [id]
     );
-    
+
     if (user.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     res.json(user.rows[0]);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -151,16 +151,16 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email } = req.body;
-    
+
     const updatedUser = await pool.query(
-      'UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING id, name, email',
+      'UPDATE usuarios SET nombre = $1, email = $2 WHERE id = $3 RETURNING id, nombre as name, email',
       [name, email, id]
     );
-    
+
     if (updatedUser.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     res.json(updatedUser.rows[0]);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -228,18 +228,26 @@ router.post('/:id/change-password', verifyToken, async (req, res) => {
 
     // Verificar que el usuario solo pueda cambiar su propia contraseña
     if (req.user.id !== parseInt(id)) {
-      return res.status(403).json({ message: 'You can only change your own password.' });
+      return res
+        .status(403)
+        .json({ message: 'You can only change your own password.' });
     }
 
     // Verificar que el usuario existe y obtener su contraseña actual
-    const user = await pool.query('SELECT password FROM users WHERE id = $1', [id]);
-    
+    const user = await pool.query(
+      'SELECT password FROM usuarios WHERE id = $1',
+      [id]
+    );
+
     if (user.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     // Verificar que la contraseña actual es correcta
-    const validPassword = await bcrypt.compare(currentPassword, user.rows[0].password);
+    const validPassword = await bcrypt.compare(
+      currentPassword,
+      user.rows[0].password
+    );
     if (!validPassword) {
       return res.status(401).json({ message: 'Current password is incorrect' });
     }
@@ -248,7 +256,10 @@ router.post('/:id/change-password', verifyToken, async (req, res) => {
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
 
     // Actualizar la contraseña
-    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashedNewPassword, id]);
+    await pool.query('UPDATE usuarios SET password = $1 WHERE id = $2', [
+      hashedNewPassword,
+      id
+    ]);
 
     res.json({ message: 'Password changed successfully' });
   } catch (err) {

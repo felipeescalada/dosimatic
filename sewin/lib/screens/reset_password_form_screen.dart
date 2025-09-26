@@ -12,7 +12,8 @@ class ResetPasswordFormScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<ResetPasswordFormScreen> createState() => _ResetPasswordFormScreenState();
+  State<ResetPasswordFormScreen> createState() =>
+      _ResetPasswordFormScreenState();
 }
 
 class _ResetPasswordFormScreenState extends State<ResetPasswordFormScreen> {
@@ -36,6 +37,7 @@ class _ResetPasswordFormScreenState extends State<ResetPasswordFormScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               CustomTextField(
+                maxLines: 1,
                 controller: _newPasswordController,
                 labelText: 'New Password',
                 hintText: 'Enter your new password',
@@ -52,6 +54,7 @@ class _ResetPasswordFormScreenState extends State<ResetPasswordFormScreen> {
               ),
               const SizedBox(height: 16),
               CustomTextField(
+                maxLines: 1,
                 controller: _confirmPasswordController,
                 labelText: 'Confirm New Password',
                 hintText: 'Enter your new password again',

@@ -14,7 +14,9 @@ CREATE TYPE estado_doc AS ENUM (
     'pendiente_revision',
     'pendiente_aprobacion', 
     'aprobado',
-    'rechazado'
+    'rechazado',
+    'eliminado',
+    'borrador'
 );
 
 -- Tabla de gestiones
@@ -33,9 +35,13 @@ CREATE TABLE IF NOT EXISTS usuarios (
     id SERIAL PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255),
     rol VARCHAR(50) DEFAULT 'usuario',
     activo BOOLEAN DEFAULT true,
-    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reset_token VARCHAR(255),
+    reset_token_expires TIMESTAMP,
+    signature_image VARCHAR(255)
 );
 
 -- Tabla principal de documentos
@@ -73,11 +79,13 @@ CREATE TABLE IF NOT EXISTS historico_documentos (
     fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     usuario_id INT REFERENCES usuarios(id),
     comentarios TEXT,
-    accion VARCHAR(100) -- 'creado', 'actualizado', 'revisado', 'aprobado', 'rechazado'
+    accion VARCHAR(100) -- 'creado', 'actualizado', 'revisado', 'aprobado', 'rechazado', 'eliminado'
 );
 
 -- Índices para mejorar rendimiento
 CREATE INDEX IF NOT EXISTS idx_documentos_codigo ON documentos(codigo);
+CREATE INDEX IF NOT EXISTS idx_documentos_nombre ON documentos(nombre);
+CREATE INDEX IF NOT EXISTS idx_documentos_codigo_nombre ON documentos(codigo, nombre);
 CREATE INDEX IF NOT EXISTS idx_documentos_gestion ON documentos(gestion_id);
 CREATE INDEX IF NOT EXISTS idx_documentos_estado ON documentos(estado);
 CREATE INDEX IF NOT EXISTS idx_documentos_convencion ON documentos(convencion);
@@ -104,6 +112,43 @@ CREATE TRIGGER update_gestiones_updated_at
     BEFORE UPDATE ON gestiones 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Nuevas tablas para sistema de gestión documental con versiones
+-- Tabla principal de documentos (simplificada para el nuevo sistema)
+CREATE TABLE IF NOT EXISTS documents (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de versiones de documentos
+CREATE TABLE IF NOT EXISTS document_versions (
+    id SERIAL PRIMARY KEY,
+    document_id INT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    version INT NOT NULL,
+    original_filename VARCHAR(255) NOT NULL,
+    storage_path VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(100),
+    size_bytes BIGINT,
+    is_signed BOOLEAN DEFAULT false,
+    signed_pdf_path VARCHAR(500),
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(document_id, version)
+);
+
+-- Índices para el nuevo sistema
+CREATE INDEX IF NOT EXISTS idx_document_versions_document_id ON document_versions(document_id);
+CREATE INDEX IF NOT EXISTS idx_document_versions_version ON document_versions(document_id, version);
+CREATE INDEX IF NOT EXISTS idx_documents_created_by ON documents(created_by);
+
+-- Trigger para actualizar updated_at en documents
+DROP TRIGGER IF EXISTS update_documents_updated_at ON documents;
+CREATE TRIGGER update_documents_updated_at 
+    BEFORE UPDATE ON documents 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Insertar datos de ejemplo solo si no existen
 INSERT INTO gestiones (nombre, descripcion) 
 SELECT * FROM (VALUES 
@@ -114,13 +159,12 @@ SELECT * FROM (VALUES
 ) AS v(nombre, descripcion)
 WHERE NOT EXISTS (SELECT 1 FROM gestiones WHERE nombre = v.nombre);
 
--- Insertar usuarios de ejemplo solo si no existen
--- (Verificar primero si ya tienes usuarios en tu tabla existente)
-INSERT INTO usuarios (nombre, email, rol) 
-SELECT * FROM (VALUES 
-    ('Administrador Docs', 'admin.docs@empresa.com', 'admin'),
-    ('Juan Pérez', 'juan.perez@empresa.com', 'creador'),
-    ('María García', 'maria.garcia@empresa.com', 'revisor'),
-    ('Carlos López', 'carlos.lopez@empresa.com', 'aprobador')
-) AS v(nombre, email, rol)
-WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE email = v.email);
+-- Crear usuarios por defecto con contraseñas hasheadas (bcrypt)
+-- Contraseña para todos: admin123
+INSERT INTO usuarios (nombre, email, password, rol, activo) VALUES 
+('Administrador Sistema', 'admin.docs@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', true),
+('Gerente General', 'gerente@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'gerente', true),
+('Juan Pérez', 'juan.perez@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'creador', true),
+('María García', 'maria.garcia@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'revisor', true),
+('Carlos López', 'carlos.lopez@empresa.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'aprobador', true)
+ON CONFLICT (email) DO NOTHING;

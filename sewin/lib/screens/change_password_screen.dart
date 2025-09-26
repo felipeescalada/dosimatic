@@ -41,6 +41,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   }
                   return null;
                 },
+                maxLines: 2,
               ),
               const SizedBox(height: 16),
               CustomTextField(
@@ -57,6 +58,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   }
                   return null;
                 },
+                maxLines: 2,
               ),
               const SizedBox(height: 16),
               CustomTextField(
@@ -73,6 +75,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   }
                   return null;
                 },
+                maxLines: 1,
               ),
               const SizedBox(height: 24),
               ElevatedButton(
