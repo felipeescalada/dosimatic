@@ -128,31 +128,8 @@ class _ProfileWidgetState extends State<ProfileWidget> {
   }
 
   void _showProfileDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Perfil de Usuario'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Nombre: ${_currentUser?['nombre'] ?? 'N/A'}'),
-              const SizedBox(height: 8),
-              Text('Email: ${_currentUser?['email'] ?? 'N/A'}'),
-              const SizedBox(height: 8),
-              Text('Rol: ${_currentUser?['rol'] ?? 'N/A'}'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cerrar'),
-            ),
-          ],
-        );
-      },
-    );
+    // Navigate to profile screen instead of showing modal
+    Navigator.of(context).pushNamed('/profile');
   }
 
   Future<void> _logout() async {
