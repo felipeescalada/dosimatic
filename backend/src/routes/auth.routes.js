@@ -72,55 +72,61 @@ const nodemailer = require('nodemailer');
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email y contraseña son requeridos' });
+      return res
+        .status(400)
+        .json({ message: 'Email y contraseña son requeridos' });
     }
 
-    const user = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
-    
+    const user = await pool.query('SELECT * FROM usuarios WHERE email = $1', [
+      email
+    ]);
+
     if (user.rows.length === 0) {
-      console.log(`[AUTH] Login failed: Invalid credentials for ${email}`);
       return res.status(401).json({ message: 'Credenciales inválidas' });
     }
 
     const userData = user.rows[0];
 
     if (userData.activo === false) {
-      console.log(`[AUTH] Login blocked: Inactive account ${userData.id}`);
       return res.status(401).json({ message: 'Cuenta desactivada' });
     }
 
-    const validPassword = await bcrypt.compare(password, userData.password || '');
-    
+    const validPassword = await bcrypt.compare(
+      password,
+      userData.password || ''
+    );
+
     if (!validPassword) {
-      console.log(`[AUTH] Login failed: Invalid password for ${userData.id}`);
       return res.status(401).json({ message: 'Credenciales inválidas' });
     }
 
     const token = jwt.sign(
-      { 
+      {
         id: userData.id,
         email: userData.email,
-        role: userData.rol 
+        role: userData.rol
       },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '1d' }
     );
 
-    console.log(`[AUTH] Login successful for user ${userData.id} (${userData.rol})`);
-    res.json({ 
+    const responseData = {
       token,
       user: {
         id: userData.id,
         email: userData.email,
         nombre: userData.nombre,
-        rol: userData.rol
+        rol: userData.rol,
+        fecha_creacion: userData.fecha_creacion || userData.created_at || null
       }
-    });
+    };
+    
+    res.json(responseData);
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Error interno del servidor',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
