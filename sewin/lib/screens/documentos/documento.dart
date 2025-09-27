@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:sewin/models/documento_model.dart';
 import 'package:sewin/services/documento_service.dart';
 import 'package:sewin/services/global_error_service.dart';
-import 'package:sewin/services/auth_service.dart';
 import 'package:sewin/screens/documentos/documento_modal_form.dart';
 import 'package:sewin/utils/document_utils.dart';
 import 'package:sewin/widgets/app_drawer.dart';
@@ -149,7 +148,7 @@ class _DocumentosPageState extends State<DocumentosPage> {
   // Función para obtener documentos filtrados por vista
   Future<void> _fetchFilteredDocuments(String view, {int page = 1}) async {
     if (view == 'resumen') {
-      _fetchDocuments(page: page);
+      await _fetchDocuments(page: page);
       return;
     }
 
@@ -184,7 +183,9 @@ class _DocumentosPageState extends State<DocumentosPage> {
         _totalCount = filteredResult['total'] as int;
         _isLoading = false;
       });
+      _stopLoadingTimer(); // Stop the loading timer after successful data load
     } catch (e) {
+      _stopLoadingTimer(); // Ensure timer is stopped on error
       setState(() {
         _errorMessage = 'Error de conexión: $e';
         _isLoading = false;
@@ -237,6 +238,68 @@ class _DocumentosPageState extends State<DocumentosPage> {
         });
         GlobalErrorService.showError('Error de conexión: $e');
       }
+    }
+  }
+
+  // Show firmar context menu
+  void _showFirmarMenu(BuildContext context, Documento doc) {
+    showMenu(
+      context: context,
+      position: const RelativeRect.fromLTRB(100, 100, 0, 0),
+      items: [
+        const PopupMenuItem<String>(
+          value: 'firmar_digital',
+          child: Row(
+            children: [
+              Icon(Icons.edit_note, size: 18, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Firma Digital'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'firmar_fisica',
+          child: Row(
+            children: [
+              Icon(Icons.draw, size: 18, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Firma Física'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'aprobar',
+          child: Row(
+            children: [
+              Icon(Icons.check_circle, size: 18, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Aprobar'),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value != null) {
+        _handleFirmarAction(value, doc);
+      }
+    });
+  }
+
+  // Handle firmar action selection
+  void _handleFirmarAction(String action, Documento doc) {
+    switch (action) {
+      case 'firmar_digital':
+        // TODO: Implement digital signature functionality
+        print('Firmar digitalmente documento: ${doc.nombre}');
+        break;
+      case 'firmar_fisica':
+        // TODO: Implement physical signature functionality
+        print('Firmar físicamente documento: ${doc.nombre}');
+        break;
+      case 'aprobar':
+        // TODO: Implement approval functionality
+        print('Aprobar documento: ${doc.nombre}');
+        break;
     }
   }
 
@@ -956,7 +1019,19 @@ class _DocumentosPageState extends State<DocumentosPage> {
                           DataCell(Text(document.gestionNombre)),
                           DataCell(Text(
                               document.fechaCreacion.toString().split(' ')[0])),
-                          DataCell(Text(document.comentariosRevision ?? '')),
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Firmar button
+                                IconButton(
+                                  icon: const Icon(Icons.edit_document, size: 18, color: Colors.blue),
+                                  onPressed: () => _showFirmarMenu(context, document),
+                                  tooltip: 'Firmar documento',
+                                ),
+                              ],
+                            ),
+                          ),
                           DataCell(
                             Row(
                               mainAxisSize: MainAxisSize.min,
@@ -1043,7 +1118,6 @@ class DocumentosDataSource extends DataTableSource {
   final BuildContext _context;
   final Function _onEdit;
   final Function _onDelete;
-  final AuthService _authService = AuthService();
 
   DocumentosDataSource(
     this._documentos,
@@ -1070,37 +1144,18 @@ class DocumentosDataSource extends DataTableSource {
         DataCell(Text(doc.gestionNombre)),
         DataCell(Text(doc.fechaCreacion.toString().split(' ')[0])),
         DataCell(
-          FutureBuilder<Map<String, dynamic>?>(
-            future: _authService.getCurrentUser(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                );
-              }
-
-              final user = snapshot.data!;
-              final userRole = user['rol'] ?? 'user';
-              final userId = user['id'];
-
-              final menuItems = _buildMenuItems(doc, userRole, userId);
-
-              // Only show menu if there are items available
-              if (menuItems.isEmpty) {
-                return const SizedBox(width: 20, height: 20);
-              }
-
-              return PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, size: 20),
-                padding: EdgeInsets.zero,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Firmar button (visible as separate icon)
+              IconButton(
+                icon: const Icon(Icons.edit_document, size: 20, color: Colors.blue),
                 tooltip: 'Firmar documento',
-                onSelected: (value) =>
-                    _handleMenuAction(value, doc, userRole, userId),
-                itemBuilder: (BuildContext context) => menuItems,
-              );
-            },
+                onPressed: () => _showFirmarMenu(_context, doc),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
           ),
         ),
         DataCell(
@@ -1137,33 +1192,64 @@ class DocumentosDataSource extends DataTableSource {
   @override
   int get selectedRowCount => 0;
 
-  // Build menu items based on user role and document state
-  List<PopupMenuEntry<String>> _buildMenuItems(
-      Documento doc, String userRole, int userId) {
-    List<PopupMenuEntry<String>> items = [];
-
-    items.add(
-      const PopupMenuItem<String>(
-        value: 'firmar',
-        child: Row(
-          children: [
-            Icon(Icons.edit_note, size: 18, color: Colors.green),
-            SizedBox(width: 8),
-            Text('Firmar'),
-          ],
+  // Show firmar context menu
+  void _showFirmarMenu(BuildContext context, Documento doc) {
+    showMenu(
+      context: context,
+      position: const RelativeRect.fromLTRB(100, 100, 0, 0),
+      items: [
+        const PopupMenuItem<String>(
+          value: 'firmar_digital',
+          child: Row(
+            children: [
+              Icon(Icons.edit_note, size: 18, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Firma Digital'),
+            ],
+          ),
         ),
-      ),
-    );
-
-    return items;
+        const PopupMenuItem<String>(
+          value: 'firmar_fisica',
+          child: Row(
+            children: [
+              Icon(Icons.draw, size: 18, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Firma Física'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'aprobar',
+          child: Row(
+            children: [
+              Icon(Icons.check_circle, size: 18, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Aprobar'),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value != null) {
+        _handleFirmarAction(value, doc);
+      }
+    });
   }
 
-  // Handle menu action selection
-  void _handleMenuAction(
-      String action, Documento doc, String userRole, int userId) {
+  // Handle firmar action selection
+  void _handleFirmarAction(String action, Documento doc) {
     switch (action) {
-      case 'firmar':
-        // TODO: Implement firmar functionality
+      case 'firmar_digital':
+        // TODO: Implement digital signature functionality
+        print('Firmar digitalmente documento: ${doc.nombre}');
+        break;
+      case 'firmar_fisica':
+        // TODO: Implement physical signature functionality
+        print('Firmar físicamente documento: ${doc.nombre}');
+        break;
+      case 'aprobar':
+        // TODO: Implement approval functionality
+        print('Aprobar documento: ${doc.nombre}');
         break;
     }
   }
