@@ -12,12 +12,12 @@ if (process.env.npm_config_local || process.argv.includes('--local')) {
 }
 
 const { testConnection } = require('./config/database');
-const documentosRoutes = require('./routes/documentos');
-const usersRoutes = require('./routes/users');
+const documentosRoutes = require('./routes/documentos.routes');
+const usersRoutes = require('./routes/users.routes');
 const authRoutes = require('./routes/auth.routes');
 const contactRoutes = require('./routes/contact.routes');
-const gestionesRoutes = require('./routes/gestiones');
-const lookupRoutes = require('./routes/lookup');
+const gestionesRoutes = require('./routes/gestiones.routes');
+const lookupRoutes = require('./routes/lookup.routes');
 
 const app = express();
 

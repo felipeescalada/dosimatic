@@ -6,10 +6,9 @@ const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 
 const { testConnection } = require('./config/database');
-const documentosRoutes = require('./routes/documentos');
+const documentosRoutes = require('./routes/documentos.routes');
 const authRoutes = require('./routes/auth.routes');
-const userRoutes = require('./routes/user.routes');
-const usersRoutes = require('./routes/users');
+const usersRoutes = require('./routes/users.routes');
 
 const app = express();
 
@@ -110,7 +109,6 @@ app.get('/api', (req, res) => {
 // Rutas de la API
 app.use('/api/documentos', documentosRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
 app.use('/api/users', usersRoutes);
 
 // Middleware de manejo de errores 404
