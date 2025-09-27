@@ -515,16 +515,27 @@ class _DocumentosPageState extends State<DocumentosPage> {
       drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Gestión de Documentos'),
+        elevation: 0, // Remove shadow/elevation
+        scrolledUnderElevation: 0, // Prevent elevation when scrolling
+        surfaceTintColor: Colors.transparent, // Prevent color tinting
+        backgroundColor: Colors.grey[100], // Match left navbar background color
       ),
-      body: Row(
+      body: Column(
         children: [
-          // Left Navbar
-          Container(
-            width: 280,
-            color: Colors.grey[100],
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          // Header section spanning full width
+          _buildHeaderSection(),
+          
+          // Main content area with left navbar and right content
+          Expanded(
+            child: Row(
               children: [
+                // Left Navbar
+                Container(
+                  width: 280,
+                  color: Colors.grey[100],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                 // Agregar Documento Button
                 Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -677,14 +688,61 @@ class _DocumentosPageState extends State<DocumentosPage> {
             ),
           ),
 
-          // Right Content Area
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              child: _buildRightContent(),
+                // Right Content Area
+                Expanded(
+                  child: _buildRightContent(),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderSection() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Navigation tabs with slash separators
+          _buildHeaderTab('Inicio', false),
+          _buildSlashSeparator(),
+          _buildHeaderTab('Gestión Documental', false),
+          _buildSlashSeparator(),
+          _buildHeaderTab('Documentos', true),
+        ],
+      ),
+    );
+  }
+
+  // Helper widget for slash separator
+  Widget _buildSlashSeparator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: Text(
+        '/',
+        style: TextStyle(
+          fontSize: 14,
+          color: Colors.grey[600],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderTab(String title, bool isActive) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+        color: isActive ? const Color(0xFF2C3E50) : Colors.grey[600],
       ),
     );
   }
@@ -712,9 +770,11 @@ class _DocumentosPageState extends State<DocumentosPage> {
             _searchQuery.isNotEmpty ? 'Resultados de búsqueda' : 'Documentos';
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         // Header with title and document count
         Row(
           children: [
@@ -1025,8 +1085,10 @@ class _DocumentosPageState extends State<DocumentosPage> {
                               children: [
                                 // Firmar button
                                 IconButton(
-                                  icon: const Icon(Icons.edit_document, size: 18, color: Colors.blue),
-                                  onPressed: () => _showFirmarMenu(context, document),
+                                  icon: const Icon(Icons.edit_document,
+                                      size: 18, color: Colors.blue),
+                                  onPressed: () =>
+                                      _showFirmarMenu(context, document),
                                   tooltip: 'Firmar documento',
                                 ),
                               ],
@@ -1092,7 +1154,8 @@ class _DocumentosPageState extends State<DocumentosPage> {
           },
           showPagination: true, // Always show pagination controls
         ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1149,7 +1212,8 @@ class DocumentosDataSource extends DataTableSource {
             children: [
               // Firmar button (visible as separate icon)
               IconButton(
-                icon: const Icon(Icons.edit_document, size: 20, color: Colors.blue),
+                icon: const Icon(Icons.edit_document,
+                    size: 20, color: Colors.blue),
                 tooltip: 'Firmar documento',
                 onPressed: () => _showFirmarMenu(_context, doc),
                 padding: EdgeInsets.zero,
