@@ -24,16 +24,12 @@ class AuthService {
         final data = json.decode(response.body);
         final token = data['token'];
         final user = data['user']; // Get user data from login response
-        
-        if (token != null) {
+
+        if (token != null && user != null) {
+          // Save token and user data to shared preferences
           await _saveToken(token);
-          
-          // Save user data from login response
-          if (user != null) {
-            await _saveUserData(user);
-          }
-          
-          Logger.i('Login successful');
+          await _saveUserData(user);
+
           return {
             'success': true,
             'message': 'Login exitoso',
@@ -41,10 +37,10 @@ class AuthService {
             'user': user,
           };
         } else {
-          Logger.w('No token received from server');
+          Logger.w('No token or user data received from server');
           return {
             'success': false,
-            'message': 'Error: No se recibió token del servidor',
+            'message': 'Error: Datos de usuario incompletos',
           };
         }
       } else {
@@ -202,31 +198,37 @@ class AuthService {
   Future<Map<String, dynamic>?> getCurrentUser() async {
     // First try to get token
     final token = await getToken();
-    if (token == null) return null;
+    if (token == null) {
+      return null;
+    }
 
     // Check if we have cached user data
     final prefs = await SharedPreferences.getInstance();
     final storedUserData = prefs.getString(userDataKey);
-    
+
     if (storedUserData != null) {
       try {
         final userData = json.decode(storedUserData) as Map<String, dynamic>;
         return _formatUserData(userData);
-      } catch (e) {
-        // If parsing fails, continue to token fallback
-      }
+      } catch (e) {}
     }
 
     // Fall back to extracting from token
     try {
       final tokenParts = token.split('.');
-      if (tokenParts.length != 3) return null;
+      if (tokenParts.length != 3) {
+        return null;
+      }
 
       final payload = json.decode(
         utf8.decode(base64Url.decode(base64Url.normalize(tokenParts[1]))),
       ) as Map<String, dynamic>?;
 
-      return payload != null ? _getUserDataFromToken(payload) : null;
+      if (payload == null) {
+        return null;
+      }
+
+      return _getUserDataFromToken(payload);
     } catch (e) {
       return null;
     }
@@ -234,34 +236,40 @@ class AuthService {
 
   /// Formats user data into a consistent format
   Map<String, dynamic> _formatUserData(Map<String, dynamic> userData) {
-    return {
-      'id': userData['id'],
-      'email': userData['email'] ?? '',
-      'nombre': userData['nombre'] ?? 'Usuario',
-      'rol': userData['rol'] ?? 'user',
-    };
+    try {
+      final formattedData = {
+        'id': userData['id'],
+        'email': userData['email'] ?? '',
+        'nombre': userData['nombre'] ?? 'Usuario',
+        'rol': userData['rol'] ?? 'user',
+        'fecha_creacion':
+            userData['fecha_creacion'] ?? DateTime.now().toIso8601String(),
+      };
+
+      return formattedData;
+    } catch (e) {
+      rethrow;
+    }
   }
 
   Map<String, dynamic> _getUserDataFromToken(Map<String, dynamic> payload) {
-    final email = payload['email'] ?? '';
+    final email = payload['email']?.toString() ?? '';
 
     // El JWT token solo contiene: {id, email, role}
     // NO contiene nombre, así que usamos el email como fallback
     String nombre;
-    if (payload.containsKey('nombre')) {
-      nombre = payload['nombre'];
-    } else if (payload.containsKey('name')) {
-      nombre = payload['name'];
+    if (payload.containsKey('nombre') && payload['nombre'] != null) {
+      nombre = payload['nombre'].toString();
     } else if (email.isNotEmpty) {
-      // Usar la parte antes del @ del email como nombre si no hay nombre
-      nombre = email.split('@').first.replaceAll('.', ' ');
-      // Capitalizar cada palabra
-      nombre = nombre
-          .split(' ')
-          .map((word) => word.isNotEmpty
-              ? '${word[0].toUpperCase()}${word.substring(1)}'
-              : word)
-          .join(' ');
+      // Extraer el nombre del email (parte antes de la @) como fallback
+      nombre = email.split('@').first;
+      // Capitalizar primera letra
+      if (nombre.isNotEmpty) {
+        nombre = nombre[0].toUpperCase() +
+            (nombre.length > 1 ? nombre.substring(1) : '');
+      } else {
+        nombre = 'Usuario';
+      }
     } else {
       nombre = 'Usuario';
     }
@@ -283,6 +291,8 @@ class AuthService {
       'email': email,
       'nombre': nombre,
       'rol': rol,
+      'fecha_creacion':
+          payload['fecha_creacion'] ?? DateTime.now().toIso8601String(),
     };
   }
 }

@@ -204,10 +204,12 @@ router.post(
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const fs = require('fs').promises;
+    const path = require('path');
 
     logger.info(`Fetching user with id: ${id}`);
     const result = await query(
-      'SELECT id, nombre, email, rol, activo, fecha_creacion FROM usuarios WHERE id = $1',
+      'SELECT id, nombre, email, rol, activo, fecha_creacion, signature_image FROM usuarios WHERE id = $1',
       [id]
     );
 
@@ -215,7 +217,49 @@ router.get('/:id', async (req, res) => {
       return responses.notFound(res, 'Usuario');
     }
 
-    responses.success(res, result.rows[0]);
+    // Get the user data
+    const userData = { ...result.rows[0] };
+    
+    // If there's a signature image path, read the file and convert to base64
+    if (userData.signature_image) {
+      try {
+        const signaturePath = path.join(process.cwd(), userData.signature_image);
+        logger.info(`Reading signature file from: ${signaturePath}`);
+        
+        // Read the file as base64
+        const fileData = await fs.readFile(signaturePath);
+        const base64Data = fileData.toString('base64');
+        
+        // Determine the MIME type from the file extension
+        const ext = path.extname(signaturePath).toLowerCase().substring(1);
+        const mimeType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+        
+        // Create a data URL
+        userData.signature_image = `data:${mimeType};base64,${base64Data}`;
+        
+        logger.info(`Successfully read and encoded signature image (${fileData.length} bytes)`);
+      } catch (error) {
+        logger.error(`Error reading signature file: ${error.message}`);
+        // Keep the original path if we can't read the file
+        userData.signature_image = null;
+      }
+    }
+    
+    // Log the response data (without the potentially large base64 string)
+    const logData = {
+      ...userData,
+      signature_image: userData.signature_image ? '[base64 image data]' : null
+    };
+    
+    logger.info('User data prepared for response:', {
+      ...logData,
+      hasSignature: !!userData.signature_image,
+      signatureType: typeof userData.signature_image,
+      signatureLength: userData.signature_image ? userData.signature_image.length : 0
+    });
+
+    // Send the complete response with base64-encoded image
+    responses.success(res, userData);
   } catch (error) {
     logger.error(`Error obteniendo usuario: ${error.message}`);
     responses.error(res, 500, 'Error interno del servidor', error.message);
@@ -331,6 +375,96 @@ router.post('/', async (req, res) => {
   } catch (error) {
     logger.error(`Error al crear usuario: ${error.message}`);
     responses.error(res, 500, 'Error al crear el usuario', error.message);
+  }
+});
+
+/**
+ * @swagger
+ * /api/users/{id}/change-password:
+ *   post:
+ *     summary: Cambiar contraseña de usuario
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID del usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currentPassword, newPassword]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 format: password
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 6
+ *     responses:
+ *       200:
+ *         description: Contraseña actualizada correctamente
+ *       400:
+ *         description: Contraseña actual incorrecta o nueva contraseña inválida
+ *       404:
+ *         description: Usuario no encontrado
+ *       500:
+ *         description: Error del servidor
+ */
+router.post('/:id/change-password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { currentPassword, newPassword } = req.body;
+
+    // Validar nueva contraseña
+    if (!newPassword || newPassword.length < 6) {
+      return responses.error(
+        res,
+        400,
+        'La nueva contraseña debe tener al menos 6 caracteres'
+      );
+    }
+
+    // Obtener usuario y verificar contraseña actual
+    const userResult = await query(
+      'SELECT id, password FROM usuarios WHERE id = $1',
+      [id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return responses.notFound(res, 'Usuario');
+    }
+
+    const user = userResult.rows[0];
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+
+    if (!isMatch) {
+      return responses.error(res, 400, 'La contraseña actual es incorrecta');
+    }
+
+    // Actualizar contraseña
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await query('UPDATE usuarios SET password = $1 WHERE id = $2', [
+      hashedPassword,
+      id
+    ]);
+
+    responses.success(res, null, 'Contraseña actualizada exitosamente');
+  } catch (error) {
+    logger.error(`Error al cambiar contraseña: ${error.message}`);
+    responses.error(
+      res,
+      500,
+      'Error al actualizar la contraseña',
+      error.message
+    );
   }
 });
 

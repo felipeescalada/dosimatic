@@ -8,6 +8,7 @@ import 'screens/users_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/reset_password_form_screen.dart';
 import 'screens/signature_demo_screen.dart';
+import 'screens/profile_screen.dart';
 import 'services/auth_guard.dart';
 import 'services/global_error_service.dart';
 import 'dart:html' as html;
@@ -78,6 +79,9 @@ class MyApp extends StatelessWidget {
           return ResetPasswordFormScreen(token: token ?? '');
         },
         '/signature-demo': (context) => const SignatureDemoScreen(),
+        '/profile': (context) => AuthGuard(
+              child: ProfileScreen(),
+            ),
       },
     );
   }

@@ -40,9 +40,10 @@ dependencies:
   signature: ^5.5.0
   image: ^4.0.17
   file_picker: ^10.3.3
-  path_provider: ^2.1.1
+  path_provider: ^2.1.5
   provider: ^6.1.5+1
   mime: ^2.0.0
+  http_parser: ^4.1.2
 
 dev_dependencies:
   flutter_test:
