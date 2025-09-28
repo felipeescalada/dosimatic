@@ -1,7 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
+import '../global/global_constantes.dart';
 
 class SignatureService {
   static const String _signaturePathPrefix = 'signature_path_';
@@ -36,20 +41,65 @@ class SignatureService {
     }
   }
   
-  // Asociar ruta de firma a un usuario (usando SharedPreferences)
+  // Asociar firma a un usuario (sube al servidor y guarda localmente)
   static Future<bool> associateSignatureToUser(String userId, String signatureFilePath) async {
     try {
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.setString('$_signaturePathPrefix$userId', signatureFilePath);
+      final file = File(signatureFilePath);
+      if (!await file.exists()) {
+        print('Archivo de firma no encontrado: $signatureFilePath');
+        return false;
+      }
+
+      // Leer los bytes de la firma
+      final signatureBytes = await file.readAsBytes();
       
-      // También guardar timestamp de cuando se asoció
-      await prefs.setString('${_signaturePathPrefix}${userId}_timestamp', 
-          DateTime.now().toIso8601String());
+      // Crear la petición multipart
+      final url = Uri.parse('${Constants.serverapp}/api/users/$userId/signature');
+      final request = http.MultipartRequest('POST', url);
       
-      print('Firma asociada al usuario $userId: $signatureFilePath');
-      return true;
+      // Añadir el archivo a la petición
+      request.files.add(http.MultipartFile.fromBytes(
+        'signature',
+        signatureBytes,
+        filename: 'signature_$userId.png',
+        contentType: MediaType('image', 'png'),
+      ));
+
+      // Añadir token de autenticación
+      final token = await AuthService().getToken();
+      if (token == null) {
+        print('No se encontró token de autenticación');
+        return false;
+      }
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Enviar la petición
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = json.decode(response.body);
+        final serverPath = responseData['signature_path'];
+        
+        if (serverPath != null) {
+          // Guardar localmente para acceso rápido
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          await prefs.setString('$_signaturePathPrefix$userId', signatureFilePath);
+          await prefs.setString(
+            '${_signaturePathPrefix}${userId}_timestamp', 
+            DateTime.now().toIso8601String()
+          );
+          
+          print('Firma subida correctamente al servidor: $serverPath');
+          return true;
+        }
+      }
+      
+      print('Error al subir la firma al servidor: ${response.statusCode} - ${response.body}');
+      return false;
+      
     } catch (e) {
-      print('Error asociando firma al usuario: $e');
+      print('Error al asociar firma al usuario: $e');
       return false;
     }
   }
