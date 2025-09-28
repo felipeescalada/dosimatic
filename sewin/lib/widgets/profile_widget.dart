@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import '../services/auth_service.dart';
 
 class ProfileWidget extends StatefulWidget {
@@ -77,11 +76,6 @@ class _ProfileWidgetState extends State<ProfileWidget> {
       menuTopAdjusted + menuHeight,
     );
 
-    if (kDebugMode) {
-      print('Screen size: ${screenSize.width}x${screenSize.height}');
-      print('Menu dimensions: ${menuWidth}x$menuHeight');
-      print('Menu position - Left: $menuLeft, Top: $menuTopAdjusted');
-    }
 
     showMenu<String>(
       context: context,
