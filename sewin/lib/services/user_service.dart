@@ -44,26 +44,9 @@ class UserService {
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);
         
-        // Log the complete response data for debugging
-        print('Raw API response for user $userId:');
-        print('Status: ${response.statusCode}');
-        print('Headers: ${response.headers}');
-        print('Body: ${response.body}');
-        
         // Check if we have data and if it's in the expected format
         if (responseData.containsKey('data')) {
           final userData = responseData['data'] as Map<String, dynamic>;
-          
-          // Log the presence and type of signature_image
-          final hasSignature = userData.containsKey('signature_image') && 
-                             userData['signature_image'] != null;
-          
-          print('User data contains signature_image: $hasSignature');
-          if (hasSignature) {
-            print('signature_image type: ${userData['signature_image'].runtimeType}');
-            print('signature_image length: ${userData['signature_image'].length}');
-          }
-          
           return userData;
         }
         
