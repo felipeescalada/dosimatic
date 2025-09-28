@@ -35,6 +35,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Uint8List? _signatureBytes;
   String? _signatureFilePath;
   Uint8List? _tempSignatureBytes; // For web platform
+  bool _isSignatureSaved = false; // Track if signature is saved
 
   @override
   void initState() {
@@ -288,6 +289,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _signatureBytes = null;
       _signatureFilePath = null;
       _tempSignatureBytes = null;
+      _isSignatureSaved = false; // Reset saved state when clearing signature
     });
   }
 
@@ -334,6 +336,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               backgroundColor: Colors.green,
             ),
           );
+        }
+
+        // Update state to indicate signature is saved
+        if (mounted) {
+          setState(() {
+            _isSignatureSaved = true;
+          });
         }
 
         // Reload user data to show the saved signature
@@ -628,15 +637,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton(
-                                  onPressed: (_signatureFilePath != null ||
-                                              _tempSignatureBytes != null) &&
+                                  onPressed: !_isSignatureSaved && 
+                                          (_signatureFilePath != null ||
+                                           _tempSignatureBytes != null) &&
                                           !_isSaving
                                       ? _saveSignature
                                       : null,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: (_signatureFilePath !=
-                                                    null ||
-                                                _tempSignatureBytes != null) &&
+                                    backgroundColor: !_isSignatureSaved &&
+                                            (_signatureFilePath != null ||
+                                             _tempSignatureBytes != null) &&
                                             !_isSaving
                                         ? const Color(0xFF1ABC9C)
                                         : Colors.grey[400],
@@ -673,8 +683,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             ),
                                           ],
                                         )
-                                      : const Text(
-                                          'Guardar Firma',
+                                      : Text(
+                                          _isSignatureSaved ? 'Firma Guardada' : 'Guardar Firma',
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
