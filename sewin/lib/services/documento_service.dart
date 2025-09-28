@@ -51,8 +51,6 @@ class DocumentoService {
         queryParameters: queryParams,
       );
 
-      Logger.d('Fetching documentos from: $uri');
-
       final response = await http
           .get(
         uri,
