@@ -204,10 +204,12 @@ router.post(
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const fs = require('fs').promises;
+    const path = require('path');
 
     logger.info(`Fetching user with id: ${id}`);
     const result = await query(
-      'SELECT id, nombre, email, rol, activo, fecha_creacion FROM usuarios WHERE id = $1',
+      'SELECT id, nombre, email, rol, activo, fecha_creacion, signature_image FROM usuarios WHERE id = $1',
       [id]
     );
 
@@ -215,7 +217,49 @@ router.get('/:id', async (req, res) => {
       return responses.notFound(res, 'Usuario');
     }
 
-    responses.success(res, result.rows[0]);
+    // Get the user data
+    const userData = { ...result.rows[0] };
+    
+    // If there's a signature image path, read the file and convert to base64
+    if (userData.signature_image) {
+      try {
+        const signaturePath = path.join(process.cwd(), userData.signature_image);
+        logger.info(`Reading signature file from: ${signaturePath}`);
+        
+        // Read the file as base64
+        const fileData = await fs.readFile(signaturePath);
+        const base64Data = fileData.toString('base64');
+        
+        // Determine the MIME type from the file extension
+        const ext = path.extname(signaturePath).toLowerCase().substring(1);
+        const mimeType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+        
+        // Create a data URL
+        userData.signature_image = `data:${mimeType};base64,${base64Data}`;
+        
+        logger.info(`Successfully read and encoded signature image (${fileData.length} bytes)`);
+      } catch (error) {
+        logger.error(`Error reading signature file: ${error.message}`);
+        // Keep the original path if we can't read the file
+        userData.signature_image = null;
+      }
+    }
+    
+    // Log the response data (without the potentially large base64 string)
+    const logData = {
+      ...userData,
+      signature_image: userData.signature_image ? '[base64 image data]' : null
+    };
+    
+    logger.info('User data prepared for response:', {
+      ...logData,
+      hasSignature: !!userData.signature_image,
+      signatureType: typeof userData.signature_image,
+      signatureLength: userData.signature_image ? userData.signature_image.length : 0
+    });
+
+    // Send the complete response with base64-encoded image
+    responses.success(res, userData);
   } catch (error) {
     logger.error(`Error obteniendo usuario: ${error.message}`);
     responses.error(res, 500, 'Error interno del servidor', error.message);
