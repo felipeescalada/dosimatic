@@ -22,31 +22,15 @@ const lookupRoutes = require('./routes/lookup.routes');
 const app = express();
 
 // Configuración de CORS
-const allowedOrigins = [
-  'http://localhost:3000', // Flutter web default port
-  'http://localhost:3001', // Common development port
-  'http://localhost:3500', // Your API port
-  'http://127.0.0.1:3000', // Alternative localhost
-  'http://127.0.0.1:3001',
-  'http://127.0.0.1:3500'
-];
+const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3001,http://localhost:3500').split(',');
+console.log('🌐 CORS Origins loaded:', corsOrigins);
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-
-    if (
-      allowedOrigins.includes(origin) ||
-      process.env.NODE_ENV !== 'production'
-    ) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: corsOrigins,
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
 // Aplicar CORS
