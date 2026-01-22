@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'reset_password_screen.dart';
+import 'contact_list_screen.dart';
 
 // Custom painter for diagonal background
 class DiagonalPainter extends CustomPainter {
