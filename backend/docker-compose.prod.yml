@@ -1,0 +1,73 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: secwin_postgres
+    environment:
+      POSTGRES_USER: secwin_user
+      POSTGRES_PASSWORD: secwin_password
+      POSTGRES_DB: secwin_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    networks:
+      - secwin_network
+    restart: unless-stopped
+
+  # Backend API (using pre-built image)
+  backend:
+    image: secwin-backend:latest
+    container_name: secwin_backend
+    environment:
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: secwin_db
+      DB_USER: secwin_user
+      DB_PASSWORD: secwin_password
+      PORT: 3500
+      DOCKER_ENV: true
+      SIGNATURES_PATH: /app/signatures
+      UPLOADS_PATH: /app/uploads
+      SIGNED_DIR: /app/signed
+      TEMP_DIR: /app/temp
+      JWT_SECRET: your-secret-key-change-in-production
+      CORS_ORIGIN: http://187.33.157.208:3002,http://187.33.157.208:3000,http://187.33.157.208:3001,http://187.33.157.208:3501,http://localhost:3000,http://localhost:3001,http://localhost:3501
+    volumes:
+      - uploads_data:/app/uploads
+      - signed_data:/app/signed
+      - temp_data:/app/temp
+      - signatures_data:/app/signatures
+    ports:
+      - "3501:3500"
+    depends_on:
+      - postgres
+    networks:
+      - secwin_network
+    restart: unless-stopped
+
+  frontend:
+    image: nginx:stable-alpine
+    container_name: secwin_frontend
+    ports:
+      - "3002:80"
+    volumes:
+      - "./sewin/build/web:/usr/share/nginx/html:ro"
+    depends_on:
+      - backend
+    networks:
+      - secwin_network
+    restart: unless-stopped
+      
+volumes:
+  postgres_data:
+  uploads_data:
+  signed_data:
+  temp_data:
+  signatures_data:
+
+networks:
+  secwin_network:
+    driver: bridge
